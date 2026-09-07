@@ -1,0 +1,24 @@
+# 本地开发用。生产环境用 01-docker 仓库里的 compose，镜像从 GHCR 拉取。
+services:
+  class-notice-board:
+    image: ghcr.io/${GITHUB_OWNER:-wongpitt}/class-notice-board:latest
+    build: .                        # 本地调试时可用 docker compose up --build
+    container_name: class-notice-board
+    restart: unless-stopped
+    environment:
+      # 必填：签名密钥，变更会导致所有人重新登录
+      TOKEN_SECRET: ${CNB_TOKEN_SECRET:?请在 .env 中设置 CNB_TOKEN_SECRET}
+      # 注册邀请码，留空则开放注册
+      INVITE_CODE: ${CNB_INVITE_CODE:-}
+      LOG_LEVEL:   ${CNB_LOG_LEVEL:-info}
+      WEB_ROOT: /app/web            # Dockerfile 已内置，此处可省略，明确写出方便理解
+    volumes:
+      - ./data/class-notice-board:/data
+    ports:
+      # 只监听回环，由反向代理转发，不直接对公网暴露
+      - "127.0.0.1:3210:3210"
+    mem_limit: 192m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

@@ -1,0 +1,39 @@
+:root {
+  /* 品牌色 */
+  --brand-400: #F8B000;
+  --brand-500: #F5A623;
+  --brand-600: #E88000;
+  --brand-700: #E07800;
+
+  /* 背景与表面 */
+  --bg-page:         #FFF8ED;
+  --bg-surface:      #FFFFFF;
+  --bg-surface-warm: #FEFCF6;
+  --bg-subtle:       #FBF8EE;
+  --bg-brand-weak:   #FEF8E6;
+
+  /* 描边 */
+  --border:       #F0E6D2;
+  --border-strong:#E8D8B8;
+
+  /* 文字 */
+  --text-primary:   #333333;
+  --text-secondary: #666666;
+  --text-tertiary:  #999999;
+
+  /* 状态色 */
+  --success: #12B76A;
+  --danger:  #E04B4B;
+  --info:    #666666;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* 阴影（暖色投影） */
+  --shadow-card: 0 2px 12px rgba(200, 150, 60, 0.08);
+
+  /* 字体 */
+  --font: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+}

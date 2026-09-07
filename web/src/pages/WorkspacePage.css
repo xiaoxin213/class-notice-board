@@ -1,0 +1,171 @@
+.ws-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* 顶栏 */
+.ws-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 56px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.ws-header-left { display: flex; align-items: center; gap: 8px; }
+.ws-logo { font-size: 22px; }
+.ws-brand { font-size: 16px; font-weight: 700; color: var(--brand-700); }
+.ws-header-right { display: flex; align-items: center; gap: 12px; }
+.ws-conn { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-secondary); }
+.ws-conn.err { color: var(--danger); }
+.ws-user { font-size: 14px; font-weight: 500; }
+.ws-logout { padding: 6px 12px; font-size: 13px; }
+
+/* 移动端导航 */
+.ws-mobile-nav {
+  display: none;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ws-mobile-tab {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ws-mobile-tab.active { color: var(--brand-600); border-bottom-color: var(--brand-500); font-weight: 600; }
+
+/* 主体三栏 */
+.ws-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100dvh - 56px);
+}
+
+.ws-col {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px;
+}
+.ws-col-left  { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface-warm); }
+.ws-col-center{ flex: 1; background: var(--bg-surface); border-right: 1px solid var(--border); }
+.ws-col-right { width: 240px; flex-shrink: 0; background: var(--bg-surface-warm); }
+
+/* 栏标题 */
+.ws-col-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.ws-col-title  { font-size: 15px; font-weight: 600; }
+.ws-col-subtitle { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.ws-quota { font-size: 12px; color: var(--text-tertiary); margin-left: auto; }
+.ws-add-btn { background: none; font-size: 18px; color: var(--brand-600); width: 28px; height: 28px;
+  border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.ws-add-btn:hover { background: var(--bg-brand-weak); }
+
+.ws-add-form { display: flex; gap: 8px; margin-bottom: 12px; }
+.ws-add-form .input { flex: 1; font-size: 14px; padding: 7px 10px; }
+.ws-add-form .btn-primary { padding: 7px 12px; font-size: 13px; border-radius: var(--radius-sm); }
+
+/* 班级列表 */
+.ws-class-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.ws-class-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 10px; border-radius: var(--radius-md);
+  cursor: pointer; transition: background 0.12s;
+}
+.ws-class-item:hover   { background: var(--bg-brand-weak); }
+.ws-class-item.selected{ background: var(--bg-brand-weak); border: 1px solid var(--border-strong); }
+.ws-class-name { flex: 1; font-size: 14px; font-weight: 500; }
+.ws-class-role { font-size: 11px; color: var(--text-tertiary); }
+.ws-online-count { font-size: 11px; color: var(--success); font-weight: 600; }
+.ws-empty { font-size: 13px; color: var(--text-tertiary); padding: 12px 0; }
+
+/* 发布表单 */
+.ws-notice-form { display: flex; flex-direction: column; gap: 14px; }
+.ws-textarea { resize: vertical; min-height: 100px; font-size: 15px; line-height: 1.6; }
+.ws-counter  { font-size: 12px; color: var(--text-tertiary); text-align: right; margin-top: -8px; }
+.ws-selected-class { font-size: 13px; color: var(--brand-600); }
+
+.ws-templates { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 8px; padding-bottom: 4px; }
+.ws-tpl-chip {
+  white-space: nowrap; padding: 5px 12px;
+  border: 1px solid var(--border-strong); border-radius: 20px;
+  background: var(--bg-subtle); font-size: 13px; color: var(--text-primary);
+  transition: background 0.12s, border-color 0.12s;
+}
+.ws-tpl-chip:hover { background: var(--bg-brand-weak); border-color: var(--brand-500); }
+
+.ws-options-row { display: flex; flex-direction: column; gap: 10px; }
+.ws-option-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ws-option-label { font-size: 13px; color: var(--text-secondary); width: 60px; flex-shrink: 0; }
+.ws-option-btns  { display: flex; gap: 6px; }
+.ws-option-btn {
+  padding: 5px 12px; border-radius: 20px; font-size: 13px;
+  border: 1px solid var(--border); background: var(--bg-surface);
+  transition: all 0.12s; color: var(--text-primary);
+}
+.ws-option-btn.active {
+  background: var(--bg-brand-weak); border-color: var(--brand-500); color: var(--brand-700); font-weight: 600;
+}
+
+.ws-send-msg { font-size: 13px; color: var(--success); }
+.ws-send-msg.err { color: var(--danger); }
+.ws-publish-btn { align-self: flex-start; padding: 10px 28px; font-size: 15px; }
+@media (max-width: 768px) { .ws-publish-btn { width: 100%; } }
+
+/* 发布记录 */
+.ws-history { margin-top: 8px; }
+.ws-notice-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.ws-notice-item {
+  padding: 12px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius-md); background: var(--bg-subtle);
+}
+.ws-notice-content { font-size: 14px; line-height: 1.5; margin-bottom: 6px; }
+.ws-notice-meta { display: flex; gap: 10px; font-size: 12px; color: var(--text-tertiary); flex-wrap: wrap; }
+.ws-notice-status { font-weight: 500; }
+.ws-status-pending   { color: var(--brand-600); }
+.ws-status-delivered { color: var(--success); }
+.ws-status-expired   { color: var(--text-tertiary); }
+
+/* 右栏绑定 */
+.ws-bind-area { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.ws-bind-class { font-size: 13px; color: var(--text-secondary); }
+.ws-code-box {
+  background: var(--bg-brand-weak); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md); padding: 14px; text-align: center;
+}
+.ws-code-label  { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+.ws-code        { font-size: 36px; font-weight: 700; letter-spacing: 6px; color: var(--brand-700); }
+.ws-code-expire { font-size: 11px; color: var(--text-tertiary); margin: 4px 0 10px; }
+.ws-copy-btn, .ws-gen-btn, .ws-sound-btn { width: 100%; justify-content: center; font-size: 13px; }
+.ws-sound-btn   { margin-top: 4px; }
+
+/* 设备列表 */
+.ws-device-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.ws-device-item { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 6px 0; }
+.ws-device-name { flex: 1; }
+.ws-device-status { font-size: 12px; color: var(--text-tertiary); }
+.ws-refresh { margin-left: auto; font-size: 12px; color: var(--brand-600); background: none; cursor: pointer; }
+.ws-empty-hint { font-size: 13px; color: var(--text-tertiary); padding: 20px 0; }
+
+/* 响应式：768px 以下 */
+@media (max-width: 768px) {
+  .ws-mobile-nav { display: flex; }
+  .ws-body { overflow: visible; height: auto; flex-direction: column; }
+  .ws-col  { width: 100%; border-right: none; border-bottom: none; overflow: visible; display: none; }
+  .ws-col.mobile-visible { display: flex; }
+  .ws-col-left { border-bottom: 1px solid var(--border); }
+  .ws-header-right .ws-conn { display: none; }
+}
