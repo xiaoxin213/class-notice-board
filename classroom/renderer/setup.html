@@ -7,7 +7,11 @@
 <style>
   :root { --yellow:#f59e0b; --green:#22c55e; --red:#ef4444; --gray:#6b7280; }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:system-ui,'Microsoft YaHei',sans-serif; background:#fafaf9; color:#1c1917; font-size:14px; }
+  body { font-family:system-ui,'Microsoft YaHei',sans-serif; background:#fafaf9; color:#1c1917; font-size:14px; overflow-y:auto; }
+  body::-webkit-scrollbar { width:4px; }
+  body::-webkit-scrollbar-track { background:transparent; }
+  body::-webkit-scrollbar-thumb { background:#e9c870; border-radius:4px; }
+  body::-webkit-scrollbar-thumb:hover { background:#d4a047; }
   h1 { font-size:18px; font-weight:700; color:#1c1917; }
   .header { background:linear-gradient(135deg,#fef3c7,#fde68a); padding:20px 24px; border-bottom:1px solid #fde68a; }
   .subtitle { font-size:12px; color:#92400e; margin-top:4px; }
@@ -37,9 +41,7 @@
   .toggle-row { display:flex; align-items:center; justify-content:space-between; }
   .toggle { position:relative; width:44px; height:24px; cursor:pointer; }
   .toggle input { opacity:0; width:0; height:0; }
-  .slider {
-    position:absolute; inset:0; background:#d6d3d1; border-radius:12px; transition:.2s;
-  }
+  .slider { position:absolute; inset:0; background:#d6d3d1; border-radius:12px; transition:.2s; }
   .slider:before {
     content:''; position:absolute; width:18px; height:18px; left:3px; top:3px;
     background:#fff; border-radius:50%; transition:.2s;
@@ -71,6 +73,7 @@
 </div>
 <div class="body">
 
+  <!-- 绑定面板 -->
   <div id="pane-bind" class="pane active">
     <div class="card">
       <div class="card-title">连接状态</div>
@@ -80,26 +83,25 @@
       </div>
       <div style="margin-top:6px;font-size:12px;color:#78716c" id="class-info"></div>
     </div>
-
-    <div class="card">
-      <div class="card-title">首次绑定</div>
+    <div id="rebind-link" style="display:none;text-align:center;margin-top:-8px">
+      <span onclick="showBindCard()" style="font-size:12px;color:#a16207;cursor:pointer;text-decoration:underline">重新绑定到其他班级</span>
+    </div>
+    <div class="card" id="bind-card">
+      <div class="card-title" id="bind-card-title">首次绑定</div>
       <div class="form-group">
         <label>服务器地址</label>
         <input type="url" id="serverUrl" placeholder="http://192.168.1.100:3210">
       </div>
-      <div class="form-group">
-        <label>绑定码（6位数字）</label>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>绑定码（教师端生成的6位数字）</label>
         <input type="text" id="bindCode" placeholder="123456" maxlength="6" inputmode="numeric">
-      </div>
-      <div class="form-group">
-        <label>本机名称（可选）</label>
-        <input type="text" id="deviceName" placeholder="教室电脑" maxlength="40">
       </div>
       <button class="btn btn-primary" id="bindBtn" onclick="doBind()">绑定此教室电脑</button>
       <div class="msg" id="bind-msg"></div>
     </div>
   </div>
 
+  <!-- 显示设置面板 -->
   <div id="pane-settings" class="pane">
     <div class="card">
       <div class="card-title">通知展示方式</div>
@@ -115,7 +117,6 @@
         全屏：最醒目，适合课间；浮窗：不影响投影/上课
       </div>
     </div>
-
     <div class="card">
       <div class="card-title">系统</div>
       <div class="toggle-row">
@@ -127,16 +128,15 @@
       </div>
     </div>
   </div>
-</div>
 
+</div>
 <script>
 let cfg = {};
 
 async function init() {
   cfg = await window.cnb.config.get();
-  document.getElementById('serverUrl').value  = cfg.serverUrl  || '';
-  document.getElementById('deviceName').value = cfg.deviceName || '教室电脑';
-  document.getElementById('autoStart').checked = !!cfg.autoStart;
+  document.getElementById('serverUrl').value = cfg.serverUrl || '';
+  document.getElementById('autoStart').checked = cfg.autoStart !== false;
   setModeUI(cfg.displayMode || 'fullscreen');
   updateStatus({ connected: false });
   const st = await window.cnb.ws.status();
@@ -147,39 +147,52 @@ function updateStatus(st) {
   const dot  = document.getElementById('dot');
   const txt  = document.getElementById('status-text');
   const info = document.getElementById('class-info');
+  const bindCard  = document.getElementById('bind-card');
+  const rebindLink = document.getElementById('rebind-link');
+  const bindTitle = document.getElementById('bind-card-title');
   if (st.connected) {
     dot.className = 'dot dot-on';
     txt.textContent = '已连接';
     info.textContent = '班级：' + (st.className || '—') + '  设备ID：' + (st.deviceId || '—');
+    bindCard.style.display = 'none';
+    rebindLink.style.display = 'block';
+    bindTitle.textContent = '重新绑定';
   } else {
     dot.className = 'dot dot-off';
     txt.textContent = '未连接（重连中…）';
     info.textContent = cfg.serverUrl ? '服务器：' + cfg.serverUrl : '';
+    bindCard.style.display = '';
+    rebindLink.style.display = 'none';
+    bindTitle.textContent = '首次绑定';
   }
+}
+
+function showBindCard() {
+  document.getElementById('bind-card').style.display = '';
+  document.getElementById('rebind-link').style.display = 'none';
 }
 
 window.cnb.on('ws:status', updateStatus);
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['bind','settings'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i) =>
+    t.classList.toggle('active', ['bind','settings'][i]===id));
   document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
   document.getElementById('pane-'+id).classList.add('active');
 }
 
 async function doBind() {
-  const serverUrl  = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
-  const bindCode   = document.getElementById('bindCode').value.trim();
-  const deviceName = document.getElementById('deviceName').value.trim() || '教室电脑';
-  const msg        = document.getElementById('bind-msg');
-  const btn        = document.getElementById('bindBtn');
+  const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  const bindCode  = document.getElementById('bindCode').value.trim();
+  const msg = document.getElementById('bind-msg');
+  const btn = document.getElementById('bindBtn');
   if (!serverUrl || !bindCode) { msg.className='msg err'; msg.textContent='请填写服务器地址和绑定码'; return; }
   btn.disabled = true; msg.className='msg'; msg.textContent='绑定中…';
   try {
-    const res = await window.cnb.device.bind({ serverUrl, bindCode, deviceName });
+    const res = await window.cnb.device.bind({ serverUrl, bindCode });
     msg.className='msg ok';
     msg.textContent = '绑定成功！班级：' + res.className;
-    cfg.serverUrl  = serverUrl;
-    cfg.deviceName = deviceName;
+    cfg.serverUrl = serverUrl;
   } catch(e) {
     msg.className='msg err'; msg.textContent = e.message;
   } finally { btn.disabled = false; }
