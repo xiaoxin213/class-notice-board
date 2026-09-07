@@ -213,7 +213,7 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
                   <form className="ws-class-edit-form" onSubmit={e=>{e.preventDefault();handleRename(c)}}
                     onClick={e=>e.stopPropagation()}>
                     <input className="input ws-class-edit-input" autoFocus value={editingName}
-                      onChange={e=>setEditingName(e.target.value)}
+                      onChange={e=>setEditingName(e.target.value.slice(0,30))}
                       onKeyDown={e=>{ if(e.key==='Escape') setEditingId(null) }} />
                     <button type="submit" className="ws-icon-btn" title="保存">✓</button>
                     <button type="button" className="ws-icon-btn" title="取消"
@@ -222,7 +222,6 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
                 ) : (
                   <>
                     <span className="ws-class-name">{c.name}</span>
-                    <span className="ws-class-role">{c.role==='owner'?'班主任':'兼任'}</span>
                     {c.online > 0 && <span className="ws-online-count">{c.online}台在线</span>}
                     {c.role === 'owner' && (
                       <span className="ws-class-actions" onClick={e=>e.stopPropagation()}>

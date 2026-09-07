@@ -87,8 +87,8 @@
 }
 .ws-class-item:hover   { background: var(--bg-brand-weak); }
 .ws-class-item.selected{ background: var(--bg-brand-weak); border: 1px solid var(--border-strong); }
-.ws-class-name { flex: 1; font-size: 14px; font-weight: 500; }
-.ws-class-role { font-size: 11px; color: var(--text-tertiary); }
+.ws-class-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ws-class-role { font-size: 11px; color: var(--text-tertiary); flex-shrink: 0; }
 .ws-online-count { font-size: 11px; color: var(--success); font-weight: 600; }
 .ws-empty { font-size: 13px; color: var(--text-tertiary); padding: 12px 0; }
 
@@ -171,7 +171,7 @@
 }
 
 /* 班级列表 — 编辑 & 操作按钮 */
-.ws-class-actions { display: none; margin-left: auto; gap: 2px; }
+.ws-class-actions { display: none; flex-shrink: 0; gap: 2px; }
 .ws-class-item:hover .ws-class-actions { display: flex; }
 .ws-icon-btn {
   background: none; border: none; cursor: pointer; padding: 2px 5px;
