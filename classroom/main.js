@@ -14,10 +14,15 @@ const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 
 // ─── 配置 ──────────────────────────────────────────────────────────────────
 function loadConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); }
+  try {
+    const saved = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    // 旧配置可能没有 autoStart 字段，确保默认为 true
+    if (typeof saved.autoStart !== 'boolean') saved.autoStart = true;
+    return saved;
+  }
   catch {
     return { serverUrl:'', deviceToken:'', deviceId:null, classId:null,
-             className:'', deviceName:'教室电脑', displayMode:'fullscreen', autoStart:false };
+             className:'', deviceName:'教室电脑', displayMode:'fullscreen', autoStart:true };
   }
 }
 function saveConfig(cfg) {
@@ -121,7 +126,7 @@ function showNotice(notice) {
 // ─── 窗口 ────────────────────────────────────────────────────────────────────
 function createSetupWin() {
   if (setupWin&&!setupWin.isDestroyed()) { setupWin.focus(); return; }
-  setupWin = new BrowserWindow({ width:480, height:560, resizable:false, title:'班级通知屏 · 设置',
+  setupWin = new BrowserWindow({ width:480, height:600, resizable:false, title:'班级通知屏 · 设置',
     webPreferences:{ preload:path.join(__dirname,'preload.js'), contextIsolation:true } });
   setupWin.loadFile(path.join(__dirname,'renderer','setup.html'));
   setupWin.setMenu(null);
@@ -153,11 +158,12 @@ ipcMain.handle('config:get', () => ({...config}));
 ipcMain.handle('config:save', (_, updates) => {
   const needReconnect = updates.serverUrl!==config.serverUrl || updates.deviceToken!==config.deviceToken;
   Object.assign(config, updates); saveConfig(config);
-  if (typeof updates.autoStart==='boolean') app.setLoginItemSettings({openAtLogin:updates.autoStart,name:'班级通知屏'});
+  if (typeof updates.autoStart==='boolean') app.setLoginItemSettings({openAtLogin:updates.autoStart,path:app.getPath('exe'),name:'班级通知屏'});
   if (needReconnect) connectWs();
   return {ok:true};
 });
-ipcMain.handle('device:bind', async (_, {serverUrl, bindCode, deviceName}) => {
+ipcMain.handle('device:bind', async (_, {serverUrl, bindCode}) => {
+  const deviceName = require('os').hostname();
   const data = await apiPost(serverUrl, '/api/device/bind', {code:bindCode, deviceName});
   Object.assign(config, {serverUrl, deviceToken:data.deviceToken, deviceId:data.deviceId,
     classId:data.classId, className:data.className, deviceName});
@@ -200,8 +206,10 @@ app.whenReady().then(() => {
     { label:'退出', click:()=>app.quit() },
   ]));
   tray.on('double-click', createSetupWin);
-  if (!config.deviceToken) createSetupWin();
-  else connectWs();
+  // 启动时同步开机自启动（指定 exe 路径，避免 Windows 下标灰）
+  app.setLoginItemSettings({ openAtLogin: config.autoStart !== false, path: app.getPath('exe'), name: '班级通知屏' });
+  createSetupWin();            // 每次启动都打开设置窗口
+  if (config.deviceToken) connectWs();
   createOverlayWin();
   createToastWin();
 });
