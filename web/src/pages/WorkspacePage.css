@@ -169,3 +169,20 @@
   .ws-col-left { border-bottom: 1px solid var(--border); }
   .ws-header-right .ws-conn { display: none; }
 }
+
+/* 班级列表 — 编辑 & 操作按钮 */
+.ws-class-actions { display: none; margin-left: auto; gap: 2px; }
+.ws-class-item:hover .ws-class-actions { display: flex; }
+.ws-icon-btn {
+  background: none; border: none; cursor: pointer; padding: 2px 5px;
+  border-radius: 4px; font-size: 13px; color: var(--text-secondary); line-height: 1;
+}
+.ws-icon-btn:hover { background: var(--bg-brand-weak); color: var(--text-primary); }
+.ws-icon-btn-danger:hover { background: #fee2e2; color: #dc2626; }
+.ws-class-edit-form {
+  display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;
+}
+.ws-class-edit-input {
+  flex: 1; min-width: 0; padding: 2px 6px !important; height: 28px;
+  font-size: 13px !important;
+}

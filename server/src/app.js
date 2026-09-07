@@ -125,6 +125,27 @@ export function buildApp(db, config, { logger = false } = {}) {
     return reply.code(201).send({ id: created, name, role: 'owner', online: 0 });
   });
 
+
+  app.patch('/api/classes/:id', { preHandler: requireTeacher }, async (req, reply) => {
+    const classId = Number(req.params.id);
+    const row = db.prepare('SELECT role FROM teacher_class WHERE teacher_id = ? AND class_id = ?').get(req.teacher.id, classId);
+    if (!row) return reply.code(403).send({ error: '无权操作该班级' });
+    if (row.role !== 'owner') return reply.code(403).send({ error: '只有班主任可以修改班级名称' });
+    const name = String(req.body?.name ?? '').trim();
+    if (!name) return reply.code(400).send({ error: '请填写班级名称' });
+    db.prepare('UPDATE class SET name = ? WHERE id = ?').run(name, classId);
+    return { id: classId, name };
+  });
+
+  app.delete('/api/classes/:id', { preHandler: requireTeacher }, async (req, reply) => {
+    const classId = Number(req.params.id);
+    const row = db.prepare('SELECT role FROM teacher_class WHERE teacher_id = ? AND class_id = ?').get(req.teacher.id, classId);
+    if (!row) return reply.code(403).send({ error: '无权操作该班级' });
+    if (row.role !== 'owner') return reply.code(403).send({ error: '只有班主任可以删除班级' });
+    db.prepare('DELETE FROM class WHERE id = ?').run(classId);
+    return reply.code(204).send();
+  });
+
   // ---------- 教室绑定 ----------
 
   app.post('/api/classes/:id/bind-code', { preHandler: requireTeacher }, async (req, reply) => {

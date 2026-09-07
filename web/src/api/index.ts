@@ -73,3 +73,9 @@ export const publishNotice = (classId: number, content: string, displaySeconds: 
 
 export const getNotices = (classId: number) =>
   req<{ notices: Notice[] }>('GET', `/api/notices?classId=${classId}`)
+
+export const renameClass = (classId: number, name: string) =>
+  req<{ id: number; name: string }>('PATCH', `/api/classes/${classId}`, { name })
+
+export const deleteClass = (classId: number) =>
+  req<void>('DELETE', `/api/classes/${classId}`)

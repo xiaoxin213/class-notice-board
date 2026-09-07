@@ -3,7 +3,7 @@ import type {
   Teacher, ClassItem, Device, Notice, BindCode,
 } from '../api'
 import {
-  getClasses, createClass, genBindCode, getDevices,
+  getClasses, createClass, renameClass, deleteClass, genBindCode, getDevices,
   soundTest, publishNotice, getNotices, clearToken,
 } from '../api'
 import { useSSE } from '../hooks/useSSE'
@@ -37,6 +37,8 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
   const [sendMsg, setSendMsg]         = useState('')
   const [newName, setNewName]         = useState('')
   const [showAdd, setShowAdd]         = useState(false)
+  const [editingId, setEditingId]     = useState<number|null>(null)
+  const [editingName, setEditingName] = useState('')
   const [sseOk, setSseOk]             = useState(true)
   const [mobilePane, setMobilePane]   = useState<'list'|'notice'|'bind'>('list')
 
@@ -133,6 +135,28 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
     ? new Date(bindCode.expireAt * 1000).toLocaleString('zh-CN', { hour12: false })
     : ''
 
+
+  async function handleRename(c: ClassItem) {
+    const name = editingName.trim()
+    if (!name || name === c.name) { setEditingId(null); return }
+    try {
+      await renameClass(c.id, name)
+      setClasses(prev => prev.map(x => x.id === c.id ? { ...x, name } : x))
+      if (selected?.id === c.id) setSelected(prev => prev ? { ...prev, name } : prev)
+    } catch (e: any) { alert(e.message) }
+    setEditingId(null)
+  }
+
+  async function handleDelete(c: ClassItem) {
+    if (!confirm(`确认删除「${c.name}」？该班级的所有设备和通知记录将一并删除。`)) return
+    try {
+      await deleteClass(c.id)
+      const next = classes.filter(x => x.id !== c.id)
+      setClasses(next)
+      if (selected?.id === c.id) setSelected(next[0] ?? null)
+    } catch (e: any) { alert(e.message) }
+  }
+
   return (
     <div className="ws-root">
       {/* 顶栏 */}
@@ -182,12 +206,34 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
             {classes.map(c => (
               <li key={c.id}
                 className={`ws-class-item ${selected?.id===c.id?'selected':''}`}
-                onClick={() => { setSelected(c); setMobilePane('notice') }}
+                onClick={() => { if (editingId !== c.id) { setSelected(c); setMobilePane('notice') } }}
               >
                 <span className={`dot ${c.online>0?'dot-online':'dot-offline'}`} />
-                <span className="ws-class-name">{c.name}</span>
-                <span className="ws-class-role">{c.role==='owner'?'班主任':'兼任'}</span>
-                {c.online > 0 && <span className="ws-online-count">{c.online}台在线</span>}
+                {editingId === c.id ? (
+                  <form className="ws-class-edit-form" onSubmit={e=>{e.preventDefault();handleRename(c)}}
+                    onClick={e=>e.stopPropagation()}>
+                    <input className="input ws-class-edit-input" autoFocus value={editingName}
+                      onChange={e=>setEditingName(e.target.value)}
+                      onKeyDown={e=>{ if(e.key==='Escape') setEditingId(null) }} />
+                    <button type="submit" className="ws-icon-btn" title="保存">✓</button>
+                    <button type="button" className="ws-icon-btn" title="取消"
+                      onClick={e=>{e.stopPropagation();setEditingId(null)}}>✕</button>
+                  </form>
+                ) : (
+                  <>
+                    <span className="ws-class-name">{c.name}</span>
+                    <span className="ws-class-role">{c.role==='owner'?'班主任':'兼任'}</span>
+                    {c.online > 0 && <span className="ws-online-count">{c.online}台在线</span>}
+                    {c.role === 'owner' && (
+                      <span className="ws-class-actions" onClick={e=>e.stopPropagation()}>
+                        <button className="ws-icon-btn" title="重命名"
+                          onClick={()=>{ setEditingId(c.id); setEditingName(c.name) }}>✎</button>
+                        <button className="ws-icon-btn ws-icon-btn-danger" title="删除"
+                          onClick={()=>handleDelete(c)}>✕</button>
+                      </span>
+                    )}
+                  </>
+                )}
               </li>
             ))}
             {classes.length === 0 && <li className="ws-empty">暂无班级，点击＋创建</li>}
