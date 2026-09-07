@@ -7,10 +7,12 @@
     "start": "electron .",
     "build": "electron-builder --win --x64"
   },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0",
-    "ws": "^8.18.0"
+    "electron-builder": "^25.0.0"
   },
   "build": {
     "appId": "xyz.wongpitt.cnb.classroom",
@@ -27,6 +29,6 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "files": ["main.js", "preload.js", "renderer/**", "assets/**"]
+    "files": ["main.js", "preload.js", "renderer/**", "assets/**", "node_modules/**"]
   }
 }
