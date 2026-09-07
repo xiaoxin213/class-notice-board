@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>通知</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:100vw; height:100vh; overflow:hidden; }
+  body {
+    background:rgba(0,0,0,.82);
+    display:flex; align-items:center; justify-content:center;
+    font-family:system-ui,'Microsoft YaHei',sans-serif;
+    color:#fff;
+    -webkit-app-region:no-drag;
+  }
+  .box {
+    max-width:760px; width:90%; text-align:center;
+    animation:fadeIn .3s ease;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
+  .icon { font-size:56px; margin-bottom:16px; }
+  .content {
+    font-size:clamp(28px,4vw,52px);
+    font-weight:700; line-height:1.3;
+    letter-spacing:.02em;
+    text-shadow:0 2px 12px rgba(0,0,0,.5);
+    margin-bottom:20px;
+  }
+  .publisher {
+    font-size:16px; color:rgba(255,255,255,.65);
+    margin-bottom:28px;
+  }
+  .progress-track {
+    background:rgba(255,255,255,.15); border-radius:4px;
+    height:6px; overflow:hidden; width:100%;
+  }
+  .progress-bar {
+    height:100%; background:#fbbf24; border-radius:4px;
+    width:100%; transition:width linear;
+  }
+  .countdown {
+    margin-top:10px; font-size:13px; color:rgba(255,255,255,.5);
+  }
+</style>
+</head>
+<body>
+<div class="box" id="box" hidden>
+  <div class="icon">&#x1F4E2;</div>
+  <div class="content" id="content"></div>
+  <div class="publisher" id="publisher"></div>
+  <div class="progress-track"><div class="progress-bar" id="bar"></div></div>
+  <div class="countdown" id="countdown"></div>
+</div>
+<script>
+let timer = null;
+let ttsTimer = null;
+
+window.cnb.on('notify:show', (notice) => {
+  clearTimeout(timer);
+  clearTimeout(ttsTimer);
+  window.speechSynthesis.cancel();
+
+  document.getElementById('content').textContent   = notice.content;
+  document.getElementById('publisher').textContent = notice.publisher ? '— ' + notice.publisher : '';
+  document.getElementById('box').hidden = false;
+
+  const bar = document.getElementById('bar');
+  const cd  = document.getElementById('countdown');
+  const sec = notice.displaySeconds || 60;
+  bar.style.transition = 'none'; bar.style.width = '100%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      bar.style.transition = 'width ' + sec + 's linear';
+      bar.style.width = '0%';
+    });
+  });
+
+  let left = sec;
+  cd.textContent = left + 's';
+  const cdTimer = setInterval(() => {
+    left--;
+    cd.textContent = left > 0 ? left + 's' : '';
+    if (left <= 0) clearInterval(cdTimer);
+  }, 1000);
+
+  let remaining = notice.speakTimes || 1;
+  function speak() {
+    if (remaining <= 0) return;
+    remaining--;
+    const utt = new SpeechSynthesisUtterance(notice.content);
+    utt.lang = 'zh-CN'; utt.rate = 0.95; utt.pitch = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+    if (zhVoice) utt.voice = zhVoice;
+    utt.onend = () => { if (remaining > 0) ttsTimer = setTimeout(speak, 800); };
+    window.speechSynthesis.speak(utt);
+  }
+  if (window.speechSynthesis.getVoices().length > 0) {
+    speak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => { speak(); window.speechSynthesis.onvoiceschanged = null; };
+  }
+
+  timer = setTimeout(() => {
+    window.speechSynthesis.cancel();
+    document.getElementById('box').hidden = true;
+    window.cnb.notifyDone(notice.id);
+  }, sec * 1000);
+});
+</script>
+</body>
+</html>
