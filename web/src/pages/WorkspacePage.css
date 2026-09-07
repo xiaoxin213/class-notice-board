@@ -66,7 +66,7 @@
 .ws-col::-webkit-scrollbar-track { background: transparent; }
 .ws-col::-webkit-scrollbar-thumb { background: #D4BE9A; border-radius: 4px; }
 .ws-col::-webkit-scrollbar-thumb:hover { background: #B89A6A; }
-.ws-col-left  { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface-warm); overflow: hidden; }
+.ws-col-left  { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface-warm);padding-right: 0px; overflow: hidden; }
 .ws-col-center{ flex: 1; min-width: 0; background: var(--bg-surface); border-right: 1px solid var(--border); overflow: hidden; }
 .ws-col-right { width: 240px; flex-shrink: 0; background: var(--bg-surface-warm); }
 
