@@ -10,6 +10,9 @@ services:
       TOKEN_SECRET: ${CNB_TOKEN_SECRET:?请在 .env 中设置 CNB_TOKEN_SECRET}
       # 注册邀请码，留空则开放注册
       INVITE_CODE: ${CNB_INVITE_CODE:-}
+      INIT_ADMIN_USERNAME: ${CNB_INIT_ADMIN_USERNAME:-}
+      INIT_ADMIN_PASSWORD: ${CNB_INIT_ADMIN_PASSWORD:-}
+      INIT_ADMIN_DISPLAY_NAME: ${CNB_INIT_ADMIN_DISPLAY_NAME:-管理员}
       LOG_LEVEL:   ${CNB_LOG_LEVEL:-info}
       DATA_DIR: /data
       WEB_ROOT: /app/web            # Dockerfile 已内置，此处可省略，明确写出方便理解

@@ -17,7 +17,8 @@ export const clearToken = () => { _token = ''; try { localStorage.removeItem('to
 
 // ---- fetch 封装 ----
 async function req<T>(method: string, path: string, body?: unknown, auth = true): Promise<T> {
-  const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+  const headers: Record<string,string> = {}
+  if (body != null) headers['Content-Type'] = 'application/json'
   if (auth && _token) headers['Authorization'] = `Bearer ${_token}`
 
   let res: Response
