@@ -171,8 +171,8 @@
 }
 
 /* 班级列表 — 编辑 & 操作按钮 */
-.ws-class-actions { display: none; flex-shrink: 0; gap: 2px; }
-.ws-class-item:hover .ws-class-actions { display: flex; }
+.ws-class-actions { display: flex; flex-shrink: 0; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+.ws-class-item:hover .ws-class-actions { opacity: 1; }
 .ws-icon-btn {
   background: none; border: none; cursor: pointer; padding: 2px 5px;
   border-radius: 4px; font-size: 13px; color: var(--text-secondary); line-height: 1;
