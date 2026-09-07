@@ -66,12 +66,12 @@
 .ws-col::-webkit-scrollbar-track { background: transparent; }
 .ws-col::-webkit-scrollbar-thumb { background: #D4BE9A; border-radius: 4px; }
 .ws-col::-webkit-scrollbar-thumb:hover { background: #B89A6A; }
-.ws-col-left  { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface-warm); }
+.ws-col-left  { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface-warm); overflow: hidden; }
 .ws-col-center{ flex: 1; min-width: 0; background: var(--bg-surface); border-right: 1px solid var(--border); overflow: hidden; }
 .ws-col-right { width: 240px; flex-shrink: 0; background: var(--bg-surface-warm); }
 
 /* 栏标题 */
-.ws-col-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.ws-col-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
 .ws-col-title  { font-size: 15px; font-weight: 600; }
 .ws-col-subtitle { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 .ws-quota { font-size: 12px; color: var(--text-tertiary); margin-left: auto; }
@@ -79,12 +79,26 @@
   border-radius: 6px; display: flex; align-items: center; justify-content: center; }
 .ws-add-btn:hover { background: var(--bg-brand-weak); }
 
-.ws-add-form { display: flex; gap: 8px; margin-bottom: 12px; }
+.ws-add-form { display: flex; gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
 .ws-add-form .input { flex: 1; font-size: 14px; padding: 7px 10px; }
 .ws-add-form .btn-primary { padding: 7px 12px; font-size: 13px; border-radius: var(--radius-sm); }
 
 /* 班级列表 */
-.ws-class-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.ws-class-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  padding-bottom: 4px;
+}
+.ws-class-list::-webkit-scrollbar { width: 4px; }
+.ws-class-list::-webkit-scrollbar-track { background: transparent; }
+.ws-class-list::-webkit-scrollbar-thumb { background: #D4BE9A; border-radius: 4px; }
+.ws-class-list::-webkit-scrollbar-thumb:hover { background: #B89A6A; }
 .ws-class-item {
   display: flex; align-items: center; gap: 7px;
   padding: 9px 10px; border-radius: var(--radius-md);
