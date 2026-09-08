@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Teacher, AdminTeacherStat, AdminSettings } from '../api'
-import { getAdminStats, getAdminSettings, updateAdminSettings, clearToken } from '../api'
+import {
+  getAdminStats, getAdminSettings, updateAdminSettings, clearToken,
+  updateTeacher, setTeacherDisabled, deleteTeacher,
+} from '../api'
 import './AdminPage.css'
 
 interface Props {
@@ -22,6 +25,12 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
   const [saving, setSaving]     = useState(false)
   const [hint, setHint]         = useState<{ msg: string; ok: boolean } | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
+
+  // 编辑用户弹窗状态
+  const [editTarget, setEditTarget] = useState<AdminTeacherStat | null>(null)
+  const [editName, setEditName]     = useState('')
+  const [editPass, setEditPass]     = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   const load = useCallback(async () => {
     setStatsLoading(true)
@@ -60,7 +69,7 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
     try {
       const updated = await updateAdminSettings({ regOpen: open })
       setSettings(updated)
-      setHint({ msg: open ? '注册已开放' : '注册已关闭', ok: true })
+      setHint({ msg: open ? '已切换为开放注册' : '已切换为仅限邀请码注册', ok: true })
     } catch (e: any) {
       setHint({ msg: e.message, ok: false })
     } finally {
@@ -82,9 +91,71 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
     onLogout()
   }
 
+  // ---- 编辑用户 ----
+  function openEdit(t: AdminTeacherStat) {
+    setEditTarget(t)
+    setEditName(t.displayName)
+    setEditPass('')
+    setHint(null)
+  }
+
+  function closeEdit() {
+    setEditTarget(null)
+    setEditName('')
+    setEditPass('')
+  }
+
+  async function saveEdit() {
+    if (!editTarget) return
+    const nameTrimmed = editName.trim()
+    const passTrimmed = editPass.trim()
+    if (!nameTrimmed) { setHint({ msg: '姓名不能为空', ok: false }); return }
+    setEditSaving(true); setHint(null)
+    try {
+      const patch: { displayName?: string; password?: string } = {}
+      if (nameTrimmed !== editTarget.displayName) patch.displayName = nameTrimmed
+      if (passTrimmed) patch.password = passTrimmed
+      if (Object.keys(patch).length > 0) await updateTeacher(editTarget.id, patch)
+      closeEdit()
+      setHint({ msg: '修改已保存', ok: true })
+      load()
+    } catch (e: any) {
+      setHint({ msg: e.message, ok: false })
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  // ---- 停用 / 启用 ----
+  async function handleDisable(t: AdminTeacherStat) {
+    const action = t.disabled ? '启用' : '停用'
+    if (!window.confirm(`确认${action}用户「${t.displayName}」？${t.disabled ? '' : '\n停用后该用户将无法登录。'}`)) return
+    setHint(null)
+    try {
+      await setTeacherDisabled(t.id, !t.disabled)
+      setHint({ msg: `已${action}「${t.displayName}」`, ok: true })
+      load()
+    } catch (e: any) {
+      setHint({ msg: e.message, ok: false })
+    }
+  }
+
+  // ---- 删除 ----
+  async function handleDelete(t: AdminTeacherStat) {
+    if (!window.confirm(`确认删除用户「${t.displayName}」（${t.username}）？\n此操作不可撤销，该用户的班级与设备将一并删除。`)) return
+    setHint(null)
+    try {
+      await deleteTeacher(t.id)
+      setHint({ msg: `已删除「${t.displayName}」`, ok: true })
+      load()
+    } catch (e: any) {
+      setHint({ msg: e.message, ok: false })
+    }
+  }
+
   const inviteLink = settings?.inviteCode
     ? `${window.location.origin}/?invite=${encodeURIComponent(settings.inviteCode)}`
-    : `${window.location.origin}/（未设置邀请码，开放注册）`
+    : `${window.location.origin}/（未设置邀请码）`
 
   return (
     <div className="admin-root">
@@ -126,7 +197,7 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
                     <span className="admin-toggle-thumb" />
                   </label>
                   <span className="admin-toggle-text">
-                    {settings.regOpen ? '开放注册' : '禁止注册'}
+                    {settings.regOpen ? '开放注册' : '仅限邀请码'}
                   </span>
                 </div>
               </div>
@@ -199,33 +270,60 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
                       <th>绑定设备</th>
                       <th>在线设备</th>
                       <th>注册时间</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {stats.teachers.map(t => (
-                      <tr key={t.id}>
-                        <td>{t.displayName}</td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{t.username}</td>
-                        <td className={t.classCount === 0 ? 'admin-zero' : ''}>{t.classCount}</td>
-                        <td className={t.deviceCount === 0 ? 'admin-zero' : ''}>{t.deviceCount}</td>
-                        <td>
-                          {t.onlineCount > 0 ? (
-                            <span className="admin-online-chip">
-                              <span className="dot" />{t.onlineCount}
-                            </span>
-                          ) : (
-                            <span className="admin-zero">—</span>
-                          )}
-                        </td>
-                        <td style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
-                          {new Date(t.createdAt * 1000).toLocaleDateString('zh-CN', {
-                            year: 'numeric', month: '2-digit', day: '2-digit',
-                          })}
-                        </td>
-                      </tr>
-                    ))}
+                    {stats.teachers.map(t => {
+                      const isSelf = t.username === teacher.username
+                      return (
+                        <tr key={t.id} className={t.disabled ? 'admin-row-disabled' : ''}>
+                          <td>
+                            <span>{t.displayName}</span>
+                            {t.disabled && <span className="admin-disabled-badge">已停用</span>}
+                            {isSelf && <span className="admin-self-badge">我</span>}
+                          </td>
+                          <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{t.username}</td>
+                          <td className={t.classCount === 0 ? 'admin-zero' : ''}>{t.classCount}</td>
+                          <td className={t.deviceCount === 0 ? 'admin-zero' : ''}>{t.deviceCount}</td>
+                          <td>
+                            {t.onlineCount > 0 ? (
+                              <span className="admin-online-chip">
+                                <span className="dot" />{t.onlineCount}
+                              </span>
+                            ) : (
+                              <span className="admin-zero">—</span>
+                            )}
+                          </td>
+                          <td style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
+                            {new Date(t.createdAt * 1000).toLocaleDateString('zh-CN', {
+                              year: 'numeric', month: '2-digit', day: '2-digit',
+                            })}
+                          </td>
+                          <td>
+                            <div className="admin-row-actions">
+                              <button className="btn-link" onClick={() => openEdit(t)}>编辑</button>
+                              {!isSelf && (
+                                <>
+                                  <button
+                                    className={t.disabled ? 'btn-link btn-link-green' : 'btn-link btn-link-warn'}
+                                    onClick={() => handleDisable(t)}
+                                  >
+                                    {t.disabled ? '启用' : '停用'}
+                                  </button>
+                                  <button
+                                    className="btn-link btn-link-danger"
+                                    onClick={() => handleDelete(t)}
+                                  >删除</button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                     {stats.teachers.length === 0 && (
-                      <tr><td colSpan={6} className="admin-loading">暂无注册用户</td></tr>
+                      <tr><td colSpan={7} className="admin-loading">暂无注册用户</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -235,6 +333,47 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
         </div>
 
       </div>
+
+      {/* 编辑用户弹窗 */}
+      {editTarget && (
+        <div className="admin-modal-overlay" onClick={closeEdit}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()}>
+            <div className="admin-modal-title">编辑用户</div>
+            <div className="admin-modal-sub">{editTarget.username}</div>
+            <div className="admin-modal-field">
+              <label className="admin-modal-label">姓名</label>
+              <input
+                className="input"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                disabled={editSaving}
+                placeholder="显示名称"
+                autoFocus
+              />
+            </div>
+            <div className="admin-modal-field">
+              <label className="admin-modal-label">新密码</label>
+              <input
+                className="input"
+                type="password"
+                value={editPass}
+                onChange={e => setEditPass(e.target.value)}
+                disabled={editSaving}
+                placeholder="留空则不修改密码"
+              />
+            </div>
+            {hint && !hint.ok && (
+              <div className="admin-error-hint" style={{ marginBottom: 4 }}>{hint.msg}</div>
+            )}
+            <div className="admin-modal-actions">
+              <button className="btn-secondary" onClick={closeEdit} disabled={editSaving}>取消</button>
+              <button className="btn-primary" onClick={saveEdit} disabled={editSaving}>
+                {editSaving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

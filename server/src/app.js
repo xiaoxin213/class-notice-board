@@ -86,11 +86,15 @@ export function buildApp(db, config, { logger = false } = {}) {
     const regOpen = getSetting(db, 'reg_open', '1') === '1';
 
     if (!regOpen) {
-      return reply.code(403).send({ error: '当前不开放注册，请联系管理员' });
-    }
-    if (currentCode && inviteCode !== currentCode) {
+      // 关闭"开放注册"时，仍可凭邀请码注册（邀请码为空则完全关闭）
+      if (!currentCode || inviteCode !== currentCode) {
+        return reply.code(403).send({ error: '注册需要邀请码，请联系管理员获取' });
+      }
+    } else if (currentCode && inviteCode !== currentCode) {
+      // 开放注册时，若设置了邀请码同样校验
       return reply.code(403).send({ error: '邀请码不正确' });
     }
+
     if (!username || String(username).length < 3) return reply.code(400).send({ error: '账号名至少 3 个字符' });
     if (!password || String(password).length < 6) return reply.code(400).send({ error: '密码至少 6 位' });
     if (db.prepare('SELECT 1 FROM teacher WHERE username = ?').get(username)) {
@@ -101,7 +105,7 @@ export function buildApp(db, config, { logger = false } = {}) {
     ).run(username, hashPassword(password), displayName || username, now());
     return reply.code(201).send({
       token: signToken({ tid: info.lastInsertRowid }, config.tokenSecret, config.tokenTtlSeconds),
-      teacher: { id: info.lastInsertRowid, username, displayName: displayName || username },
+      teacher: { id: info.lastInsertRowid, username, displayName: displayName || username, isAdmin: false },
     });
   });
 
@@ -111,9 +115,13 @@ export function buildApp(db, config, { logger = false } = {}) {
     if (!row || !verifyPassword(String(password ?? ''), row.password)) {
       return reply.code(401).send({ error: '账号或密码不正确' });
     }
+    if (row.disabled) {
+      return reply.code(403).send({ error: '账号已被停用，请联系管理员' });
+    }
+    const isAdmin = row.username === config.adminUsername;
     return {
       token: signToken({ tid: row.id }, config.tokenSecret, config.tokenTtlSeconds),
-      teacher: { id: row.id, username: row.username, displayName: row.display_name },
+      teacher: { id: row.id, username: row.username, displayName: row.display_name, isAdmin },
     };
   });
 
@@ -289,7 +297,7 @@ export function buildApp(db, config, { logger = false } = {}) {
 
   app.get('/api/admin/stats', { preHandler: [requireTeacher, requireAdmin] }, async () => {
     const teachers = db.prepare(
-      'SELECT id, username, display_name, created_at FROM teacher ORDER BY id',
+      'SELECT id, username, display_name, disabled, created_at FROM teacher ORDER BY id',
     ).all();
 
     const result = teachers.map((t) => {
@@ -310,6 +318,7 @@ export function buildApp(db, config, { logger = false } = {}) {
         id: t.id,
         username: t.username,
         displayName: t.display_name,
+        disabled: t.disabled === 1,
         createdAt: t.created_at,
         classCount: classes.length,
         deviceCount,
@@ -333,6 +342,46 @@ export function buildApp(db, config, { logger = false } = {}) {
       inviteCode: getSetting(db, 'invite_code', config.inviteCode),
       regOpen: getSetting(db, 'reg_open', '1') === '1',
     };
+  });
+
+  // 修改用户姓名 / 密码
+  app.patch('/api/admin/teachers/:id', { preHandler: [requireTeacher, requireAdmin] }, async (req, reply) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM teacher WHERE id = ?').get(id);
+    if (!row) return reply.code(404).send({ error: '用户不存在' });
+
+    const { displayName, password } = req.body ?? {};
+    if (displayName !== undefined) {
+      const name = String(displayName).trim();
+      if (!name) return reply.code(400).send({ error: '姓名不能为空' });
+      db.prepare('UPDATE teacher SET display_name = ? WHERE id = ?').run(name, id);
+    }
+    if (password !== undefined) {
+      if (String(password).length < 6) return reply.code(400).send({ error: '密码至少 6 位' });
+      db.prepare('UPDATE teacher SET password = ? WHERE id = ?').run(hashPassword(String(password)), id);
+    }
+    return { ok: true };
+  });
+
+  // 停用 / 启用用户
+  app.patch('/api/admin/teachers/:id/disabled', { preHandler: [requireTeacher, requireAdmin] }, async (req, reply) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM teacher WHERE id = ?').get(id);
+    if (!row) return reply.code(404).send({ error: '用户不存在' });
+    if (row.username === config.adminUsername) return reply.code(403).send({ error: '不能停用管理员账号' });
+    const disabled = req.body?.disabled ? 1 : 0;
+    db.prepare('UPDATE teacher SET disabled = ? WHERE id = ?').run(disabled, id);
+    return { ok: true, disabled: disabled === 1 };
+  });
+
+  // 删除用户
+  app.delete('/api/admin/teachers/:id', { preHandler: [requireTeacher, requireAdmin] }, async (req, reply) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM teacher WHERE id = ?').get(id);
+    if (!row) return reply.code(404).send({ error: '用户不存在' });
+    if (row.username === config.adminUsername) return reply.code(403).send({ error: '不能删除管理员账号' });
+    db.prepare('DELETE FROM teacher WHERE id = ?').run(id);
+    return reply.code(204).send();
   });
 
   // ---------- 教师端 SSE ----------

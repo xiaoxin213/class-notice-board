@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS teacher (
   username     TEXT    NOT NULL UNIQUE,
   password     TEXT    NOT NULL,
   display_name TEXT    NOT NULL,
+  disabled     INTEGER NOT NULL DEFAULT 0,
   created_at   INTEGER NOT NULL
 );
 
@@ -77,6 +78,14 @@ export function openDb(dataDir) {
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA);
+
+  // 迁移：旧库没有 disabled 列时自动补上
+  try {
+    const cols = db.prepare('PRAGMA table_info(teacher)').all();
+    if (!cols.find(c => c.name === 'disabled')) {
+      db.exec('ALTER TABLE teacher ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
+    }
+  } catch {}
 
   // node:sqlite 没有 transaction()，补上一个与 better-sqlite3 API 兼容的实现
   db.transaction = (fn) => (...args) => {

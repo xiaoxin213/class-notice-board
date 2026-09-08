@@ -9,7 +9,7 @@ export interface Notice   {
 export interface BindCode { code: string; expireAt: number }
 
 export interface AdminTeacherStat {
-  id: number; username: string; displayName: string; createdAt: number;
+  id: number; username: string; displayName: string; disabled: boolean; createdAt: number;
   classCount: number; deviceCount: number; onlineCount: number;
 }
 export interface AdminSettings { inviteCode: string; regOpen: boolean }
@@ -98,3 +98,12 @@ export const getAdminSettings = () =>
 
 export const updateAdminSettings = (patch: Partial<AdminSettings>) =>
   req<AdminSettings>('PUT', '/api/admin/settings', patch)
+
+export const updateTeacher = (id: number, patch: { displayName?: string; password?: string }) =>
+  req<{ ok: boolean }>('PATCH', `/api/admin/teachers/${id}`, patch)
+
+export const setTeacherDisabled = (id: number, disabled: boolean) =>
+  req<{ ok: boolean; disabled: boolean }>('PATCH', `/api/admin/teachers/${id}/disabled`, { disabled })
+
+export const deleteTeacher = (id: number) =>
+  req<void>('DELETE', `/api/admin/teachers/${id}`)

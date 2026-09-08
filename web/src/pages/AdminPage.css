@@ -214,6 +214,39 @@
 
 .admin-table tr:hover td { background: var(--bg); }
 
+/* 停用行变暗 */
+.admin-row-disabled td {
+  opacity: 0.45;
+}
+.admin-row-disabled:hover td {
+  background: transparent;
+}
+
+/* 徽章 */
+.admin-disabled-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--danger, #ef4444);
+  background: color-mix(in srgb, var(--danger, #ef4444) 12%, transparent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  vertical-align: middle;
+}
+
+.admin-self-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  vertical-align: middle;
+}
+
 .admin-online-chip {
   display: inline-flex;
   align-items: center;
@@ -233,6 +266,29 @@
 
 .admin-zero { color: var(--text-tertiary); }
 
+/* 操作按钮列 */
+.admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+  line-height: 1;
+}
+.btn-link:hover { text-decoration: underline; }
+
+.btn-link-warn  { color: var(--warn, #f59e0b); }
+.btn-link-green { color: var(--online, #22c55e); }
+.btn-link-danger { color: var(--danger, #ef4444); }
+
 .admin-loading {
   text-align: center;
   padding: 32px;
@@ -249,6 +305,62 @@
 .admin-error-hint {
   font-size: 12px;
   color: var(--danger, #ef4444);
+}
+
+/* 编辑用户弹窗 */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.admin-modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+}
+
+.admin-modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-modal-sub {
+  margin-top: -10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.admin-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-modal-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.admin-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 @media (max-width: 600px) {
