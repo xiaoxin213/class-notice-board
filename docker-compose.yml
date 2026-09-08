@@ -8,8 +8,11 @@ services:
     environment:
       # 必填：签名密钥，变更会导致所有人重新登录
       TOKEN_SECRET: ${CNB_TOKEN_SECRET:?请在 .env 中设置 CNB_TOKEN_SECRET}
-      # 注册邀请码，留空则开放注册
+      # 注册邀请码，留空则开放注册（可在管理后台动态修改）
       INVITE_CODE: ${CNB_INVITE_CODE:-}
+      # 管理员账号用户名，与 INIT_ADMIN_USERNAME 保持一致
+      ADMIN_USERNAME: ${CNB_ADMIN_USERNAME:-admin}
+      # 首次启动自动建管理员账号（幂等，仅首次有效）
       INIT_ADMIN_USERNAME: ${CNB_INIT_ADMIN_USERNAME:-}
       INIT_ADMIN_PASSWORD: ${CNB_INIT_ADMIN_PASSWORD:-}
       INIT_ADMIN_DISPLAY_NAME: ${CNB_INIT_ADMIN_DISPLAY_NAME:-管理员}

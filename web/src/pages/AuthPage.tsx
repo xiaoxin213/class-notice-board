@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Teacher } from '../api'
 import { login, register, setToken } from '../api'
 import './AuthPage.css'
@@ -13,6 +13,16 @@ export default function AuthPage({ onAuth }: Props) {
   const [inviteCode, setInviteCode]   = useState('')
   const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
+
+  // 读取 URL ?invite= 参数，自动填入邀请码并切换到注册 tab
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('invite')
+    if (code) {
+      setInviteCode(code)
+      setTab('register')
+    }
+  }, [])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()

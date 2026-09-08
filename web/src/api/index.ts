@@ -1,5 +1,5 @@
 // ---- 类型 ----
-export interface Teacher { id: number; username: string; displayName: string }
+export interface Teacher { id: number; username: string; displayName: string; isAdmin?: boolean }
 export interface ClassItem { id: number; name: string; role: 'owner'|'assistant'; online: number }
 export interface Device   { id: number; name: string; last_seen_at: number; online: boolean }
 export interface Notice   {
@@ -7,6 +7,12 @@ export interface Notice   {
   created_at: number; display_seconds: number; speak_times: number; publisher: string;
 }
 export interface BindCode { code: string; expireAt: number }
+
+export interface AdminTeacherStat {
+  id: number; username: string; displayName: string; createdAt: number;
+  classCount: number; deviceCount: number; onlineCount: number;
+}
+export interface AdminSettings { inviteCode: string; regOpen: boolean }
 
 // ---- 令牌存储 ----
 let _token = ''
@@ -64,8 +70,11 @@ export const genBindCode = (classId: number) =>
 export const getDevices  = (classId: number) =>
   req<{ devices: Device[] }>('GET', `/api/classes/${classId}/devices`)
 
-export const soundTest   = (classId: number) =>
+export const soundTest    = (classId: number) =>
   req<{ sentTo: number }>('POST', `/api/classes/${classId}/sound-test`)
+
+export const deleteDevice = (classId: number, deviceId: number) =>
+  req<void>('DELETE', `/api/classes/${classId}/devices/${deviceId}`)
 
 // ---- 通知 ----
 export const publishNotice = (classId: number, content: string, displaySeconds: number, speakTimes: number) =>
@@ -79,3 +88,13 @@ export const renameClass = (classId: number, name: string) =>
 
 export const deleteClass = (classId: number) =>
   req<void>('DELETE', `/api/classes/${classId}`)
+
+// ---- 管理后台 ----
+export const getAdminStats = () =>
+  req<{ teachers: AdminTeacherStat[]; totalOnline: number }>('GET', '/api/admin/stats')
+
+export const getAdminSettings = () =>
+  req<AdminSettings>('GET', '/api/admin/settings')
+
+export const updateAdminSettings = (patch: Partial<AdminSettings>) =>
+  req<AdminSettings>('PUT', '/api/admin/settings', patch)

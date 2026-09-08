@@ -4,12 +4,16 @@ import type {
 } from '../api'
 import {
   getClasses, createClass, renameClass, deleteClass, genBindCode, getDevices,
-  soundTest, publishNotice, getNotices, clearToken,
+  soundTest, publishNotice, getNotices, clearToken, deleteDevice,
 } from '../api'
 import { useSSE } from '../hooks/useSSE'
 import './WorkspacePage.css'
 
-interface Props { teacher: Teacher; onLogout: () => void }
+interface Props {
+  teacher: Teacher
+  onLogout: () => void
+  onAdmin?: () => void
+}
 
 const DISPLAY_OPTIONS = [
   { label: '30秒', value: 30 },
@@ -23,7 +27,7 @@ const SPEAK_OPTIONS = [
 ]
 const TEMPLATES = ['请到办公室', '到操场集合', '带作业本来办公室', '课代表来办公室']
 
-export default function WorkspacePage({ teacher, onLogout }: Props) {
+export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
   const [classes, setClasses]         = useState<ClassItem[]>([])
   const [maxClasses, setMaxClasses]   = useState(50)
   const [selected, setSelected]       = useState<ClassItem | null>(null)
@@ -157,6 +161,15 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
     } catch (e: any) { alert(e.message) }
   }
 
+  async function handleDeleteDevice(d: Device) {
+    if (!selected) return
+    if (!confirm(`确认删除设备「${d.name}」？`)) return
+    try {
+      await deleteDevice(selected.id, d.id)
+      setDevices(prev => prev.filter(x => x.id !== d.id))
+    } catch (e: any) { alert(e.message) }
+  }
+
   return (
     <div className="ws-root">
       {/* 顶栏 */}
@@ -171,6 +184,9 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
             {sseOk ? '服务已连接' : '连接断开'}
           </span>
           <span className="ws-user">{teacher.displayName}</span>
+          {onAdmin && (
+            <button className="btn-secondary ws-logout" onClick={onAdmin}>管理后台</button>
+          )}
           <button className="btn-secondary ws-logout" onClick={handleLogout}>退出登录</button>
         </div>
       </header>
@@ -367,6 +383,15 @@ export default function WorkspacePage({ teacher, onLogout }: Props) {
                           <span className={`dot ${d.online?'dot-online':'dot-offline'}`} />
                           <span className="ws-device-name">{d.name}</span>
                           <span className="ws-device-status">{d.online?'在线':'离线'}</span>
+                          {!d.online && d.last_seen_at && (
+                            <span className="ws-device-seen">
+                              {new Date(d.last_seen_at*1000).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}
+                            </span>
+                          )}
+                          {!d.online && (
+                            <button className="ws-device-del" title="删除设备"
+                              onClick={() => handleDeleteDevice(d)}>✕</button>
+                          )}
                         </li>
                       ))}
                     </ul>

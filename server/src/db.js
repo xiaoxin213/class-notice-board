@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS notice_delivery (
   acked_at  INTEGER,
   PRIMARY KEY (notice_id, device_id)
 );
+
+CREATE TABLE IF NOT EXISTS setting (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
 export function openDb(dataDir) {

@@ -36,6 +36,19 @@ class AttemptLimiter {
   reset(key) { this.hits.delete(key); }
 }
 
+// ---------- setting 表辅助 ----------
+
+function getSetting(db, key, fallback = '') {
+  const row = db.prepare('SELECT value FROM setting WHERE key = ?').get(key);
+  return row ? row.value : fallback;
+}
+
+function setSetting(db, key, value) {
+  db.prepare(
+    'INSERT INTO setting (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+  ).run(key, String(value));
+}
+
 export function buildApp(db, config, { logger = false } = {}) {
   const app = Fastify({ logger, bodyLimit: 64 * 1024 });
   const hub = new Hub(db, config);
@@ -53,6 +66,12 @@ export function buildApp(db, config, { logger = false } = {}) {
     if (!req.teacher) return reply.code(401).send({ error: '账号不存在' });
   };
 
+  const requireAdmin = async (req, reply) => {
+    if (req.teacher?.username !== config.adminUsername) {
+      return reply.code(403).send({ error: '需要管理员权限' });
+    }
+  };
+
   const canAccessClass = (teacherId, classId) => !!db
     .prepare('SELECT 1 FROM teacher_class WHERE teacher_id = ? AND class_id = ?')
     .get(teacherId, classId);
@@ -61,7 +80,15 @@ export function buildApp(db, config, { logger = false } = {}) {
 
   app.post('/api/auth/register', async (req, reply) => {
     const { username, password, displayName, inviteCode } = req.body ?? {};
-    if (config.inviteCode && inviteCode !== config.inviteCode) {
+
+    // 邀请码和注册开关从 DB 读取（兜底用 config 初始值）
+    const currentCode = getSetting(db, 'invite_code', config.inviteCode);
+    const regOpen = getSetting(db, 'reg_open', '1') === '1';
+
+    if (!regOpen) {
+      return reply.code(403).send({ error: '当前不开放注册，请联系管理员' });
+    }
+    if (currentCode && inviteCode !== currentCode) {
       return reply.code(403).send({ error: '邀请码不正确' });
     }
     if (!username || String(username).length < 3) return reply.code(400).send({ error: '账号名至少 3 个字符' });
@@ -91,7 +118,10 @@ export function buildApp(db, config, { logger = false } = {}) {
   });
 
   app.get('/api/me', { preHandler: requireTeacher }, async (req) => ({
-    id: req.teacher.id, username: req.teacher.username, displayName: req.teacher.display_name,
+    id: req.teacher.id,
+    username: req.teacher.username,
+    displayName: req.teacher.display_name,
+    isAdmin: req.teacher.username === config.adminUsername,
   }));
 
   // ---------- 班级 ----------
@@ -178,15 +208,25 @@ export function buildApp(db, config, { logger = false } = {}) {
     }
     const token = newDeviceToken();
     const cls = db.prepare('SELECT name FROM class WHERE id = ?').get(row.class_id);
-    const info = db.transaction(() => {
+    const deviceName = String(req.body?.deviceName ?? '教室电脑').slice(0, 40);
+    const result = db.transaction(() => {
       db.prepare('UPDATE bind_code SET used_at = ? WHERE code = ?').run(now(), code);
-      return db.prepare(
+      // 同一班级内同名设备 → 复用旧记录（换绑时不堆积）
+      const existing = db.prepare('SELECT id FROM device WHERE class_id = ? AND name = ?')
+        .get(row.class_id, deviceName);
+      if (existing) {
+        db.prepare('UPDATE device SET token_hash = ?, last_seen_at = ? WHERE id = ?')
+          .run(hashDeviceToken(token), now(), existing.id);
+        return { deviceId: existing.id };
+      }
+      const info = db.prepare(
         'INSERT INTO device (class_id, token_hash, name, created_at) VALUES (?, ?, ?, ?)',
-      ).run(row.class_id, hashDeviceToken(token), String(req.body?.deviceName ?? '教室电脑').slice(0, 40), now());
+      ).run(row.class_id, hashDeviceToken(token), deviceName, now());
+      return { deviceId: info.lastInsertRowid };
     })();
     bindLimiter.reset(key);
     return reply.code(201).send({
-      deviceToken: token, deviceId: info.lastInsertRowid, classId: row.class_id, className: cls.name,
+      deviceToken: token, deviceId: result.deviceId, classId: row.class_id, className: cls.name,
     });
   });
 
@@ -195,6 +235,17 @@ export function buildApp(db, config, { logger = false } = {}) {
     if (!canAccessClass(req.teacher.id, classId)) return reply.code(403).send({ error: '无权操作该班级' });
     const rows = db.prepare('SELECT id, name, last_seen_at FROM device WHERE class_id = ?').all(classId);
     return { devices: rows.map((d) => ({ ...d, online: hub.isOnline(d.id) })) };
+  });
+
+  app.delete('/api/classes/:id/devices/:deviceId', { preHandler: requireTeacher }, async (req, reply) => {
+    const classId = Number(req.params.id);
+    const deviceId = Number(req.params.deviceId);
+    if (!canAccessClass(req.teacher.id, classId)) return reply.code(403).send({ error: '无权操作该班级' });
+    const device = db.prepare('SELECT id FROM device WHERE id = ? AND class_id = ?').get(deviceId, classId);
+    if (!device) return reply.code(404).send({ error: '设备不存在' });
+    if (hub.isOnline(deviceId)) return reply.code(400).send({ error: '设备在线中，无法删除' });
+    db.prepare('DELETE FROM device WHERE id = ?').run(deviceId);
+    return reply.code(204).send();
   });
 
   app.post('/api/classes/:id/sound-test', { preHandler: requireTeacher }, async (req, reply) => {
@@ -232,6 +283,56 @@ export function buildApp(db, config, { logger = false } = {}) {
       WHERE n.class_id = ? ORDER BY n.id DESC LIMIT 30
     `).all(classId);
     return { notices: rows };
+  });
+
+  // ---------- 管理后台 ----------
+
+  app.get('/api/admin/stats', { preHandler: [requireTeacher, requireAdmin] }, async () => {
+    const teachers = db.prepare(
+      'SELECT id, username, display_name, created_at FROM teacher ORDER BY id',
+    ).all();
+
+    const result = teachers.map((t) => {
+      const classes = db.prepare(`
+        SELECT c.id FROM class c
+        JOIN teacher_class tc ON tc.class_id = c.id
+        WHERE tc.teacher_id = ? AND tc.role = 'owner'
+      `).all(t.id);
+
+      let deviceCount = 0;
+      let onlineCount = 0;
+      for (const c of classes) {
+        deviceCount += db.prepare('SELECT COUNT(*) AS n FROM device WHERE class_id = ?').get(c.id).n;
+        onlineCount += hub.onlineCount(c.id);
+      }
+
+      return {
+        id: t.id,
+        username: t.username,
+        displayName: t.display_name,
+        createdAt: t.created_at,
+        classCount: classes.length,
+        deviceCount,
+        onlineCount,
+      };
+    });
+
+    return { teachers: result, totalOnline: hub.devices.size };
+  });
+
+  app.get('/api/admin/settings', { preHandler: [requireTeacher, requireAdmin] }, async () => ({
+    inviteCode: getSetting(db, 'invite_code', config.inviteCode),
+    regOpen: getSetting(db, 'reg_open', '1') === '1',
+  }));
+
+  app.put('/api/admin/settings', { preHandler: [requireTeacher, requireAdmin] }, async (req) => {
+    const { inviteCode, regOpen } = req.body ?? {};
+    if (inviteCode !== undefined) setSetting(db, 'invite_code', String(inviteCode).trim());
+    if (regOpen !== undefined) setSetting(db, 'reg_open', regOpen ? '1' : '0');
+    return {
+      inviteCode: getSetting(db, 'invite_code', config.inviteCode),
+      regOpen: getSetting(db, 'reg_open', '1') === '1',
+    };
   });
 
   // ---------- 教师端 SSE ----------

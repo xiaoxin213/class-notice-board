@@ -9,8 +9,10 @@ export function loadConfig(env = process.env) {
     dataDir: env.DATA_DIR || './data',
     // 生产环境必须显式设置，否则重启后所有登录态失效
     tokenSecret: env.TOKEN_SECRET || randomBytes(32).toString('hex'),
-    // 注册邀请码，留空表示开放注册
+    // 注册邀请码初始值（写入 DB 后以 DB 为准），留空表示开放注册
     inviteCode: env.INVITE_CODE || '',
+    // 管理员账号用户名，登录后可访问管理后台
+    adminUsername: env.ADMIN_USERNAME || 'admin',
     // 登录态有效期
     tokenTtlSeconds: int(env.TOKEN_TTL_SECONDS, 30 * 24 * 3600),
     // 绑定码有效期
