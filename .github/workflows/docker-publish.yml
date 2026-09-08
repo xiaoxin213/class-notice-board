@@ -10,12 +10,16 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/class-notice-board
 
 jobs:
-  # ── Job 1：在 Windows 上编译教室端 Electron 安装包 ──────────────────────────
+  # ── Job 1：自动升版本 + 编译教室端 Electron 安装包 ──────────────────────────
   build-installer:
     runs-on: windows-latest
+    permissions:
+      contents: write      # 允许 CI 推版本号 commit + tag
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -27,6 +31,24 @@ jobs:
       - name: Install dependencies
         working-directory: classroom
         run: npm ci
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version & push tag
+        shell: bash
+        run: |
+          cd classroom
+          npm version patch --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          cd ..
+          git add classroom/package.json classroom/package-lock.json
+          git commit -m "chore: bump to v${VERSION} [skip ci]"
+          git tag "v${VERSION}"
+          git push origin HEAD:main --tags
 
       - name: Build Windows installer
         working-directory: classroom

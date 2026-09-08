@@ -1,11 +1,12 @@
 {
   "name": "class-notice-board-classroom",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "班级通知屏 · 教室端",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64"
+    "build": "npm version patch && electron-builder --win --x64",
+    "release": "npm version patch && electron-builder --win --x64"
   },
   "dependencies": {
     "ws": "^8.18.0"
@@ -17,7 +18,9 @@
   "build": {
     "appId": "xyz.wongpitt.cnb.classroom",
     "productName": "班级通知屏",
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",
@@ -30,6 +33,12 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "files": ["main.js", "preload.js", "renderer/**", "assets/**", "node_modules/**"]
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "assets/**",
+      "node_modules/**"
+    ]
   }
 }
