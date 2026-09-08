@@ -48,7 +48,7 @@ function wsUrl() {
 
 function connectWs() {
   // 先摘掉旧连接的所有事件，再关闭，防止 close 事件触发 scheduleReconnect 与新连接竞争
-  if (ws) { ws.removeAllListeners(); try { ws.close(); } catch {} ws=null; }
+  if (ws) { ws.removeAllListeners(); ws.on('error',()=>{}); try { ws.close(); } catch {} ws=null; }
   clearTimeout(reconnectTimer);
   reconnectIdx=0;
   const url = wsUrl();
