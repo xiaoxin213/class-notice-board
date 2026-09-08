@@ -10,7 +10,38 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/class-notice-board
 
 jobs:
+  # ── Job 1：在 Windows 上编译教室端 Electron 安装包 ──────────────────────────
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: classroom/package-lock.json
+
+      - name: Install dependencies
+        working-directory: classroom
+        run: npm ci
+
+      - name: Build Windows installer
+        working-directory: classroom
+        run: npm run build
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: classroom-installer
+          path: classroom/dist/*.exe
+          retention-days: 7
+
+  # ── Job 2：构建 Docker 镜像并推送到 GHCR ────────────────────────────────────
   build-push:
+    needs: build-installer
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,6 +50,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download classroom installer
+        uses: actions/download-artifact@v4
+        with:
+          name: classroom-installer
+          path: web/public/downloads   # Vite 构建时会把 public/ 原样复制进 dist/
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
