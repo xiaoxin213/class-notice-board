@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Teacher, AdminTeacherStat, AdminSettings } from '../api'
 import {
   getAdminStats, getAdminSettings, updateAdminSettings, clearToken,
-  updateTeacher, setTeacherDisabled, deleteTeacher,
+  updateTeacher, setTeacherDisabled, deleteTeacher, getAdminDownloads,
 } from '../api'
 import './AdminPage.css'
 
@@ -25,6 +25,7 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
   const [saving, setSaving]     = useState(false)
   const [hint, setHint]         = useState<{ msg: string; ok: boolean } | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
+  const [downloads, setDownloads] = useState<{ name: string; url: string }[]>([])
 
   // 编辑用户弹窗状态
   const [editTarget, setEditTarget] = useState<AdminTeacherStat | null>(null)
@@ -35,10 +36,15 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
   const load = useCallback(async () => {
     setStatsLoading(true)
     try {
-      const [s, cfg] = await Promise.all([getAdminStats(), getAdminSettings()])
+      const [s, cfg, dl] = await Promise.all([
+        getAdminStats(),
+        getAdminSettings(),
+        getAdminDownloads(),
+      ])
       setStats(s)
       setSettings(cfg)
       setCodeInput(cfg.inviteCode)
+      setDownloads(dl.files)
     } catch (e: any) {
       setHint({ msg: e.message, ok: false })
     } finally {
@@ -56,20 +62,6 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
       setSettings(updated)
       setCodeInput(updated.inviteCode)
       setHint({ msg: '邀请码已保存', ok: true })
-    } catch (e: any) {
-      setHint({ msg: e.message, ok: false })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function toggleRegOpen(open: boolean) {
-    if (!settings) return
-    setSaving(true); setHint(null)
-    try {
-      const updated = await updateAdminSettings({ regOpen: open })
-      setSettings(updated)
-      setHint({ msg: open ? '已切换为开放注册' : '已切换为仅限邀请码注册', ok: true })
     } catch (e: any) {
       setHint({ msg: e.message, ok: false })
     } finally {
@@ -155,7 +147,7 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
 
   const inviteLink = settings?.inviteCode
     ? `${window.location.origin}/?invite=${encodeURIComponent(settings.inviteCode)}`
-    : `${window.location.origin}/（未设置邀请码）`
+    : ''
 
   return (
     <div className="admin-root">
@@ -176,31 +168,11 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
 
         {/* 注册管理 */}
         <div className="admin-card">
-          <div className="admin-card-title">🔑 注册管理</div>
+          <div className="admin-card-title">🔑 邀请码管理</div>
           {settings === null ? (
             <div className="admin-loading">加载中…</div>
           ) : (
             <div className="admin-settings-grid">
-
-              {/* 注册开关 */}
-              <div className="admin-setting-row">
-                <span className="admin-setting-label">注册状态</span>
-                <div className="admin-toggle-row">
-                  <label className="admin-toggle">
-                    <input
-                      type="checkbox"
-                      checked={settings.regOpen}
-                      disabled={saving}
-                      onChange={e => toggleRegOpen(e.target.checked)}
-                    />
-                    <span className="admin-toggle-track" />
-                    <span className="admin-toggle-thumb" />
-                  </label>
-                  <span className="admin-toggle-text">
-                    {settings.regOpen ? '开放注册' : '仅限邀请码'}
-                  </span>
-                </div>
-              </div>
 
               {/* 邀请码编辑 */}
               <div className="admin-setting-row">
@@ -209,7 +181,7 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
                   className="input admin-code-input"
                   value={codeInput}
                   onChange={e => setCodeInput(e.target.value.toUpperCase().slice(0, 20))}
-                  placeholder="留空 = 无需邀请码"
+                  placeholder="留空则禁止注册"
                   disabled={saving}
                 />
                 <div className="admin-setting-actions">
@@ -228,13 +200,21 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
               </div>
 
               {/* 注册链接 */}
-              <div className="admin-setting-row">
-                <span className="admin-setting-label">注册链接</span>
-                <span className="admin-invite-link">{inviteLink}</span>
-                <button className="btn-secondary" onClick={copyLink} disabled={!settings.inviteCode}>
-                  复制链接
-                </button>
-              </div>
+              {inviteLink && (
+                <div className="admin-setting-row">
+                  <span className="admin-setting-label">注册链接</span>
+                  <span className="admin-invite-link">{inviteLink}</span>
+                  <button className="btn-secondary" onClick={copyLink}>
+                    复制链接
+                  </button>
+                </div>
+              )}
+
+              {!settings.inviteCode && (
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  邀请码为空时，注册功能关闭。设置邀请码后，老师凭码注册。
+                </p>
+              )}
 
               {hint && (
                 <div className={hint.ok ? 'admin-saved-hint' : 'admin-error-hint'}>
@@ -245,7 +225,7 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
           )}
         </div>
 
-        {/* 用户统计 */}
+        {/* 注册用户 */}
         <div className="admin-card">
           <div className="admin-card-title">👥 注册用户</div>
           {statsLoading ? (
@@ -330,6 +310,31 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
               </div>
             </>
           ) : null}
+        </div>
+
+        {/* 教室端下载 */}
+        <div className="admin-card">
+          <div className="admin-card-title">💻 教室端下载</div>
+          {downloads.length > 0 ? (
+            <div className="admin-download-list">
+              {downloads.map(f => (
+                <div key={f.name} className="admin-download-item">
+                  <span className="admin-download-name">📦 {f.name}</span>
+                  <a
+                    href={f.url}
+                    className="btn-secondary"
+                    style={{ fontSize: 13, padding: '6px 14px', textDecoration: 'none' }}
+                    download
+                  >下载</a>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-download-hint">
+              暂无可下载的安装包。将构建好的 <code>.exe</code> 安装包放入服务器的
+              <code>web/dist/downloads/</code> 目录后，刷新此页面即可显示下载链接。
+            </p>
+          )}
         </div>
 
       </div>

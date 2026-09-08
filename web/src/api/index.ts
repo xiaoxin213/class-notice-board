@@ -12,7 +12,7 @@ export interface AdminTeacherStat {
   id: number; username: string; displayName: string; disabled: boolean; createdAt: number;
   classCount: number; deviceCount: number; onlineCount: number;
 }
-export interface AdminSettings { inviteCode: string; regOpen: boolean }
+export interface AdminSettings { inviteCode: string }
 
 // ---- 令牌存储 ----
 let _token = ''
@@ -107,3 +107,6 @@ export const setTeacherDisabled = (id: number, disabled: boolean) =>
 
 export const deleteTeacher = (id: number) =>
   req<void>('DELETE', `/api/admin/teachers/${id}`)
+
+export const getAdminDownloads = () =>
+  req<{ files: { name: string; url: string }[] }>('GET', '/api/admin/downloads')

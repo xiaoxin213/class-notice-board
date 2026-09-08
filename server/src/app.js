@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { WebSocketServer } from 'ws';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, normalize, extname } from 'node:path';
 import { now } from './db.js';
 import {
@@ -81,18 +81,10 @@ export function buildApp(db, config, { logger = false } = {}) {
   app.post('/api/auth/register', async (req, reply) => {
     const { username, password, displayName, inviteCode } = req.body ?? {};
 
-    // 邀请码和注册开关从 DB 读取（兜底用 config 初始值）
+    // 始终需要邀请码注册（邀请码为空则完全关闭注册）
     const currentCode = getSetting(db, 'invite_code', config.inviteCode);
-    const regOpen = getSetting(db, 'reg_open', '1') === '1';
-
-    if (!regOpen) {
-      // 关闭"开放注册"时，仍可凭邀请码注册（邀请码为空则完全关闭）
-      if (!currentCode || inviteCode !== currentCode) {
-        return reply.code(403).send({ error: '注册需要邀请码，请联系管理员获取' });
-      }
-    } else if (currentCode && inviteCode !== currentCode) {
-      // 开放注册时，若设置了邀请码同样校验
-      return reply.code(403).send({ error: '邀请码不正确' });
+    if (!currentCode || inviteCode !== currentCode) {
+      return reply.code(403).send({ error: '注册需要邀请码，请联系管理员获取' });
     }
 
     if (!username || String(username).length < 3) return reply.code(400).send({ error: '账号名至少 3 个字符' });
@@ -331,17 +323,26 @@ export function buildApp(db, config, { logger = false } = {}) {
 
   app.get('/api/admin/settings', { preHandler: [requireTeacher, requireAdmin] }, async () => ({
     inviteCode: getSetting(db, 'invite_code', config.inviteCode),
-    regOpen: getSetting(db, 'reg_open', '1') === '1',
   }));
 
   app.put('/api/admin/settings', { preHandler: [requireTeacher, requireAdmin] }, async (req) => {
-    const { inviteCode, regOpen } = req.body ?? {};
+    const { inviteCode } = req.body ?? {};
     if (inviteCode !== undefined) setSetting(db, 'invite_code', String(inviteCode).trim());
-    if (regOpen !== undefined) setSetting(db, 'reg_open', regOpen ? '1' : '0');
-    return {
-      inviteCode: getSetting(db, 'invite_code', config.inviteCode),
-      regOpen: getSetting(db, 'reg_open', '1') === '1',
-    };
+    return { inviteCode: getSetting(db, 'invite_code', config.inviteCode) };
+  });
+
+  app.get('/api/admin/downloads', { preHandler: [requireTeacher, requireAdmin] }, async () => {
+    if (!config.webRoot) return { files: [] };
+    const dir = join(config.webRoot, 'downloads');
+    try {
+      const entries = await readdir(dir);
+      const files = entries
+        .filter((name) => name.endsWith('.exe') || name.endsWith('.dmg') || name.endsWith('.pkg'))
+        .map((name) => ({ name, url: `/downloads/${name}` }));
+      return { files };
+    } catch {
+      return { files: [] };
+    }
   });
 
   // 修改用户姓名 / 密码

@@ -20,7 +20,8 @@
     "directories": { "output": "dist" },
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-Setup-v${version}.exe"
     },
     "nsis": {
       "oneClick": false,
