@@ -1,6 +1,6 @@
 {
   "name": "class-notice-board-classroom",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "班级通知屏 · 教室端",
   "main": "main.js",
   "scripts": {
@@ -36,14 +36,25 @@
       "createStartMenuShortcut": true
     },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
       "icon": "assets/icon.png",
       "artifactName": "${productName}-v${version}-mac-${arch}.dmg",
       "category": "public.app-category.education"
     },
     "dmg": {
       "title": "${productName} ${version}",
-      "window": { "width": 540, "height": 380 }
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "files": [
       "main.js",
