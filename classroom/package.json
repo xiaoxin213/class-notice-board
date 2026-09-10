@@ -1,6 +1,6 @@
 {
   "name": "class-notice-board-classroom",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "班级通知屏 · 教室端",
   "main": "main.js",
   "scripts": {
@@ -41,7 +41,13 @@
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "icon": "assets/icon.png",
       "artifactName": "${productName}-v${version}-mac-${arch}.dmg",
@@ -49,11 +55,16 @@
     },
     "dmg": {
       "title": "${productName} ${version}",
-      "window": { "width": 540, "height": 380 }
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "linux": {
       "target": [
-        { "target": "AppImage" }
+        {
+          "target": "AppImage"
+        }
       ],
       "icon": "assets/icon.png",
       "artifactName": "${productName}-v${version}-linux-${arch}.AppImage",
