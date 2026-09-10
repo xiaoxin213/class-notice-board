@@ -194,7 +194,7 @@
 
 /* 设备列表 */
 .ws-device-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
-.ws-device-item { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 6px 0; }
+.ws-device-item { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 6px 0; cursor: default;}
 .ws-device-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-device-status { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
 .ws-device-seen { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; opacity: .7; }

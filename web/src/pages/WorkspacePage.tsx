@@ -237,7 +237,7 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
                   </form>
                 ) : (
                   <>
-                    <span className="ws-class-name">{c.name}</span>
+                    <span className="ws-class-name" title={c.name}>{c.name}</span>
                     {c.online > 0 && <span className="ws-online-count">{c.online}台在线</span>}
                     {c.role === 'owner' && (
                       <span className="ws-class-actions" onClick={e=>e.stopPropagation()}>
@@ -379,7 +379,7 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
                   ? <p className="ws-empty">暂无绑定设备</p>
                   : <ul className="ws-device-list">
                       {devices.map(d => (
-                        <li key={d.id} className="ws-device-item">
+                        <li key={d.id} className="ws-device-item" title={d.name}>
                           <span className={`dot ${d.online?'dot-online':'dot-offline'}`} />
                           <span className="ws-device-name">{d.name}</span>
                           <span className="ws-device-status">{d.online?'在线':'离线'}</span>
