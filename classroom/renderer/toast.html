@@ -25,7 +25,6 @@
   .publisher { font-size:11px; color:rgba(255,255,255,.5); margin-top:3px; }
   .progress-track { background:rgba(255,255,255,.15); border-radius:3px; height:3px; overflow:hidden; }
   .progress-bar { height:100%; background:#fbbf24; border-radius:3px; width:100%; transition:width linear; }
-  /* 关闭按钮 */
   .close-btn {
     position:absolute; top:8px; right:10px;
     background:none; border:none;
@@ -54,9 +53,39 @@
 let timer = null;
 let currentId = null;
 
+/* ── TTS 检测（方案 A）──
+   首次调用时检测是否有中文语音，结果缓存，避免重复检测。
+   Linux / 麒麟等系统可能没有 speech-dispatcher 或中文语音包，
+   此时 getVoices() 始终为空，3 秒后超时视为不可用，静默跳过播报。
+*/
+let _ttsAvailable = null;
+function checkTTS(cb) {
+  if (_ttsAvailable !== null) { cb(_ttsAvailable); return; }
+  if (!window.speechSynthesis) { _ttsAvailable = false; cb(false); return; }
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    _ttsAvailable = voices.some(v => v.lang.startsWith('zh'));
+    cb(_ttsAvailable);
+    return;
+  }
+  const timeout = setTimeout(() => {
+    window.speechSynthesis.onvoiceschanged = null;
+    _ttsAvailable = false;
+    cb(false);
+  }, 3000);
+  window.speechSynthesis.onvoiceschanged = () => {
+    clearTimeout(timeout);
+    window.speechSynthesis.onvoiceschanged = null;
+    _ttsAvailable = window.speechSynthesis.getVoices().some(v => v.lang.startsWith('zh'));
+    cb(_ttsAvailable);
+  };
+}
+// 页面加载时预热检测，缩短首次通知的延迟
+checkTTS(() => {});
+
 function dismiss() {
   clearTimeout(timer);
-  window.speechSynthesis.cancel();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (currentId !== null) {
     window.cnb.notifyDone(currentId);
     currentId = null;
@@ -67,7 +96,7 @@ document.getElementById('closeBtn').addEventListener('click', dismiss);
 
 window.cnb.on('notify:show', (notice) => {
   clearTimeout(timer);
-  window.speechSynthesis.cancel();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
 
   currentId = notice.id;
 
@@ -94,11 +123,14 @@ window.cnb.on('notify:show', (notice) => {
     utt.onend = () => { if (remaining > 0) setTimeout(speak, 800); };
     window.speechSynthesis.speak(utt);
   }
-  if (window.speechSynthesis.getVoices().length > 0) speak();
-  else { window.speechSynthesis.onvoiceschanged = () => { speak(); window.speechSynthesis.onvoiceschanged = null; }; }
+
+  checkTTS((available) => {
+    if (available) speak();
+    // 不可用时静默跳过，toast 卡片本身已经可见，无需额外提示
+  });
 
   timer = setTimeout(() => {
-    window.speechSynthesis.cancel();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
     window.cnb.notifyDone(notice.id);
     currentId = null;
   }, sec * 1000);

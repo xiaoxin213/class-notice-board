@@ -7,8 +7,12 @@
     "start": "electron .",
     "build": "electron-builder --win --x64",
     "build:mac": "electron-builder --mac --x64 --arm64",
+    "build:linux-x64": "electron-builder --linux --x64",
+    "build:linux-arm64": "electron-builder --linux --arm64",
     "release": "npm version patch && electron-builder --win --x64",
-    "release:mac": "npm version patch --no-git-tag-version && electron-builder --mac --x64 --arm64"
+    "release:mac": "npm version patch --no-git-tag-version && electron-builder --mac --x64 --arm64",
+    "release:linux-x64": "npm version patch --no-git-tag-version && electron-builder --linux --x64",
+    "release:linux-arm64": "npm version patch --no-git-tag-version && electron-builder --linux --arm64"
   },
   "dependencies": {
     "ws": "^8.18.0"
@@ -37,13 +41,7 @@
     },
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        { "target": "dmg", "arch": ["x64", "arm64"] }
       ],
       "icon": "assets/icon.png",
       "artifactName": "${productName}-v${version}-mac-${arch}.dmg",
@@ -51,10 +49,17 @@
     },
     "dmg": {
       "title": "${productName} ${version}",
-      "window": {
-        "width": 540,
-        "height": 380
-      }
+      "window": { "width": 540, "height": 380 }
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage" }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "${productName}-v${version}-linux-${arch}.AppImage",
+      "category": "Education",
+      "synopsis": "班级通知屏教室端",
+      "description": "面向中小学教室的通知接收与展示客户端"
     },
     "files": [
       "main.js",
