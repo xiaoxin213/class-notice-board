@@ -26,6 +26,7 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
   const [hint, setHint]         = useState<{ msg: string; ok: boolean } | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [downloads, setDownloads] = useState<{ name: string; url: string }[]>([])
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
 
   // 编辑用户弹窗状态
   const [editTarget, setEditTarget] = useState<AdminTeacherStat | null>(null)
@@ -76,6 +77,13 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
       : window.location.origin
     navigator.clipboard.writeText(url)
     setHint({ msg: '链接已复制', ok: true })
+  }
+
+  function copyDownloadLink(url: string) {
+    const full = url.startsWith('http') ? url : `${window.location.origin}${url}`
+    navigator.clipboard.writeText(full)
+    setCopiedUrl(url)
+    setTimeout(() => setCopiedUrl(null), 2000)
   }
 
   function handleLogout() {
@@ -320,12 +328,19 @@ export default function AdminPage({ teacher, onBack, onLogout }: Props) {
               {downloads.map(f => (
                 <div key={f.name} className="admin-download-item">
                   <span className="admin-download-name">📦 {f.name}</span>
-                  <a
-                    href={f.url}
-                    className="btn-secondary"
-                    style={{ fontSize: 13, padding: '6px 14px', textDecoration: 'none' }}
-                    download
-                  >下载</a>
+                  <div className="admin-download-actions">
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 13, padding: '6px 14px' }}
+                      onClick={() => copyDownloadLink(f.url)}
+                    >{copiedUrl === f.url ? '已复制 ✓' : '复制链接'}</button>
+                    <a
+                      href={f.url}
+                      className="btn-secondary"
+                      style={{ fontSize: 13, padding: '6px 14px', textDecoration: 'none' }}
+                      download
+                    >下载</a>
+                  </div>
                 </div>
               ))}
             </div>

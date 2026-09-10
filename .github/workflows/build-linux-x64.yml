@@ -2,23 +2,13 @@ name: Build Linux x64
 
 on:
   workflow_dispatch:
-    inputs:
-      bump_version:
-        description: '同时递增版本号'
-        type: boolean
-        default: false
-
 jobs:
   build-linux-x64:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -30,24 +20,6 @@ jobs:
       - name: Install dependencies
         working-directory: classroom
         run: npm ci
-
-      - name: Configure git
-        if: ${{ inputs.bump_version }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump version & push tag
-        if: ${{ inputs.bump_version }}
-        run: |
-          cd classroom
-          npm version patch --no-git-tag-version
-          VERSION=$(node -p "require('./package.json').version")
-          cd ..
-          git add classroom/package.json classroom/package-lock.json
-          git commit -m "chore: bump to v${VERSION} [skip ci]"
-          git tag "v${VERSION}"
-          git push origin HEAD:main --tags
 
       - name: Build AppImage (x64)
         working-directory: classroom

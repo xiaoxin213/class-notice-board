@@ -132,6 +132,8 @@
 
 .admin-table-wrap {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 420px;
   border-radius: 6px;
   border: 1px solid var(--border);
 }
@@ -143,6 +145,9 @@
 }
 
 .admin-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: var(--bg-subtle);
   color: var(--text-secondary);
   font-weight: 600;
@@ -266,6 +271,12 @@
   background: var(--bg-subtle);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.admin-download-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .admin-download-name {
