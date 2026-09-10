@@ -300,9 +300,11 @@
   text-decoration: none;
 }
 .l-dl-btn:hover { box-shadow: var(--lshadow-md); transform: translateY(-2px); }
-.l-dl-btn-icon { font-size: 20px; }
+.l-dl-btn-icon { font-size: 20px; display: inline-flex; align-items: center; justify-content: center; }
 .l-dl-btn-meta { display: flex; flex-direction: column; align-items: flex-start; }
 .l-dl-btn-sub { font-size: 12px; color: var(--ltext3); font-weight: 400; }
+.l-dl-btn-muted { cursor: default; opacity: 0.55; }
+.l-dl-btn-muted:hover { box-shadow: none; transform: none; }
 
 /* ── FOOTER ── */
 .l-footer {

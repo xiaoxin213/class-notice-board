@@ -222,20 +222,27 @@ export default function LandingPage() {
             在教室电脑上安装客户端，与服务器绑定后即可接收通知。
           </p>
           <div className="l-download-btns">
-            <a className="l-dl-btn" href="/api/admin/downloads" target="_blank" rel="noreferrer">
-              <span className="l-dl-btn-icon">🪟</span>
+            <a className="l-dl-btn" href="https://cnb.992498.xyz/downloads/%E7%8F%AD%E7%BA%A7%E9%80%9A%E7%9F%A5%E5%B1%8F-Setup-v1.0.6.exe" download>
+              <span className="l-dl-btn-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1 2.9L8.3 1.9V9.4H1V2.9Z" fill="#00A4EF" />
+                  <path d="M9.2 1.8L19 0.4V9.3H9.2V1.8Z" fill="#00A4EF" />
+                  <path d="M1 10.3H8.3V17.8L1 16.8V10.3Z" fill="#00A4EF" />
+                  <path d="M9.2 10.3H19V19.3L9.2 17.9V10.3Z" fill="#00A4EF" />
+                </svg>
+              </span>
               <span className="l-dl-btn-meta">
                 <span>Windows 版</span>
                 <span className="l-dl-btn-sub">NSIS 安装包 · x64</span>
               </span>
             </a>
-            <a className="l-dl-btn" href="/api/admin/downloads" target="_blank" rel="noreferrer">
+            <div className="l-dl-btn l-dl-btn-muted">
               <span className="l-dl-btn-icon"></span>
               <span className="l-dl-btn-meta">
-                <span>macOS 版</span>
-                <span className="l-dl-btn-sub">DMG · Intel & Apple Silicon</span>
+                <span>macOS / 麒麟 / 统信 UOS 版</span>
+                <span className="l-dl-btn-sub">其他系统版本，请联系管理员获取</span>
               </span>
-            </a>
+            </div>
           </div>
         </div>
       </section>
