@@ -54,7 +54,7 @@
       "category": "public.app-category.education"
     },
     "dmg": {
-      "title": "${productName} ${version}",
+      "title": "ClassNoticeBoard ${version}",
       "window": {
         "width": 540,
         "height": 380
