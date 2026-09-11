@@ -47,16 +47,6 @@
     margin-top:18px; font-size:12px; color:rgba(255,255,255,.3);
     letter-spacing:.03em;
   }
-  /* 语音不可用提示 */
-  .tts-warn {
-    display:inline-flex; align-items:center; gap:5px;
-    margin-top:10px; font-size:12px;
-    color:rgba(255,200,100,.6);
-    background:rgba(255,180,50,.08);
-    border:1px solid rgba(255,180,50,.2);
-    border-radius:20px;
-    padding:3px 10px;
-  }
   /* 右上角关闭按钮 */
   .close-btn {
     position:fixed; top:20px; right:24px;
@@ -82,7 +72,6 @@
   <div class="progress-track"><div class="progress-bar" id="bar"></div></div>
   <div class="countdown" id="countdown"></div>
   <div class="hint">点击任意处关闭</div>
-  <div class="tts-warn" id="ttsWarn" hidden>&#x1F507; 当前设备无中文语音，已静默播报</div>
 </div>
 <script>
 let timer = null;
@@ -90,47 +79,11 @@ let ttsTimer = null;
 let cdTimer = null;
 let currentId = null;
 
-// ── TTS 可用性检测 ──────────────────────────────────────────────
-// 缓存检测结果，页面生命周期内只检测一次。
-// Linux / 麒麟系统上若未安装中文 TTS，voiceschanged 可能永远不触发，
-// 因此加 3s 超时兜底，避免无限等待。
-let _ttsAvailable = null; // null=未知 true=可用 false=不可用
-
-function checkTTS(cb) {
-  if (_ttsAvailable !== null) { cb(_ttsAvailable); return; }
-  if (!window.speechSynthesis) { _ttsAvailable = false; cb(false); return; }
-
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length > 0) {
-    _ttsAvailable = voices.some(v => v.lang.startsWith('zh'));
-    cb(_ttsAvailable);
-    return;
-  }
-
-  // 声音列表尚未加载，等待 voiceschanged 事件，最多等 3 秒
-  const timeout = setTimeout(() => {
-    window.speechSynthesis.onvoiceschanged = null;
-    _ttsAvailable = false;
-    cb(false);
-  }, 3000);
-
-  window.speechSynthesis.onvoiceschanged = () => {
-    clearTimeout(timeout);
-    window.speechSynthesis.onvoiceschanged = null;
-    _ttsAvailable = window.speechSynthesis.getVoices().some(v => v.lang.startsWith('zh'));
-    cb(_ttsAvailable);
-  };
-}
-
-// 页面加载时提前触发一次检测，缩短首次通知的延迟
-checkTTS(() => {});
-
-// ── 关闭逻辑 ───────────────────────────────────────────────────
 function dismiss() {
   clearTimeout(timer);
   clearTimeout(ttsTimer);
   clearInterval(cdTimer);
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  window.speechSynthesis.cancel();
   document.getElementById('box').hidden = true;
   document.getElementById('closeBtn').hidden = true;
   if (currentId !== null) {
@@ -144,16 +97,16 @@ document.getElementById('closeBtn').addEventListener('click', (e) => {
   dismiss();
 });
 
+// 点击背景（body）关闭，点 .box 内容区不触发
 document.body.addEventListener('click', (e) => {
   if (e.target === document.body) dismiss();
 });
 
-// ── 通知展示 ───────────────────────────────────────────────────
 window.cnb.on('notify:show', (notice) => {
   clearTimeout(timer);
   clearTimeout(ttsTimer);
   clearInterval(cdTimer);
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  window.speechSynthesis.cancel();
 
   currentId = notice.id;
 
@@ -161,19 +114,18 @@ window.cnb.on('notify:show', (notice) => {
   document.getElementById('publisher').textContent = notice.publisher ? '— ' + notice.publisher : '';
   document.getElementById('box').hidden = false;
   document.getElementById('closeBtn').hidden = false;
-  document.getElementById('ttsWarn').hidden = true; // 先隐藏，检测后再决定
 
-  // 进度条
   const bar = document.getElementById('bar');
   const cd  = document.getElementById('countdown');
   const sec = notice.displaySeconds || 60;
   bar.style.transition = 'none'; bar.style.width = '100%';
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    bar.style.transition = 'width ' + sec + 's linear';
-    bar.style.width = '0%';
-  }));
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      bar.style.transition = 'width ' + sec + 's linear';
+      bar.style.width = '0%';
+    });
+  });
 
-  // 倒计时
   let left = sec;
   cd.textContent = left + 's';
   cdTimer = setInterval(() => {
@@ -182,31 +134,26 @@ window.cnb.on('notify:show', (notice) => {
     if (left <= 0) clearInterval(cdTimer);
   }, 1000);
 
-  // 语音播报（检测中文 TTS 可用性后再决定是否播）
-  checkTTS((available) => {
-    if (!available) {
-      // 无中文语音：静默，显示提示
-      document.getElementById('ttsWarn').hidden = false;
-      return;
-    }
-
-    let remaining = notice.speakTimes || 1;
-    function speak() {
-      if (remaining <= 0) return;
-      remaining--;
-      const utt = new SpeechSynthesisUtterance(notice.content);
-      utt.lang = 'zh-CN'; utt.rate = 0.95; utt.pitch = 1;
-      const zhVoice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('zh'));
-      if (zhVoice) utt.voice = zhVoice;
-      utt.onend = () => { if (remaining > 0) ttsTimer = setTimeout(speak, 800); };
-      window.speechSynthesis.speak(utt);
-    }
+  let remaining = notice.speakTimes || 1;
+  function speak() {
+    if (remaining <= 0) return;
+    remaining--;
+    const utt = new SpeechSynthesisUtterance(notice.content);
+    utt.lang = 'zh-CN'; utt.rate = 0.95; utt.pitch = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+    if (zhVoice) utt.voice = zhVoice;
+    utt.onend = () => { if (remaining > 0) ttsTimer = setTimeout(speak, 800); };
+    window.speechSynthesis.speak(utt);
+  }
+  if (window.speechSynthesis.getVoices().length > 0) {
     speak();
-  });
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => { speak(); window.speechSynthesis.onvoiceschanged = null; };
+  }
 
-  // 自动关闭
   timer = setTimeout(() => {
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
     clearInterval(cdTimer);
     document.getElementById('box').hidden = true;
     document.getElementById('closeBtn').hidden = true;
