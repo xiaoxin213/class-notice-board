@@ -34,12 +34,12 @@ jobs:
       - name: Patch dmg-builder to use force detach
         working-directory: classroom
         run: |
-          DMG_JS="node_modules/dmg-builder/out/dmg.js"
-          if [ -f "$DMG_JS" ]; then
-            sed -i '' 's/"detach", "-quiet"/"detach", "-force", "-quiet"/g' "$DMG_JS"
-            echo "Patched: $(grep -c 'force' $DMG_JS) occurrence(s)"
+          UTIL_JS="node_modules/dmg-builder/out/dmgUtil.js"
+          if [ -f "$UTIL_JS" ]; then
+            sed -i '' 's/\["detach", "-quiet"/["detach", "-force", "-quiet"/g' "$UTIL_JS"
+            echo "Patched $(grep -c 'force' $UTIL_JS) occurrence(s) in dmgUtil.js"
           else
-            echo "dmg.js not found, skipping patch"
+            echo "dmgUtil.js not found"
           fi
 
       - name: Configure git
