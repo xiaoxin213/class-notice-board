@@ -58,7 +58,9 @@
       "window": {
         "width": 540,
         "height": 380
-      }
+      },
+      "background": null,
+      "backgroundColor": "#ffffff"
     },
     "linux": {
       "target": [
