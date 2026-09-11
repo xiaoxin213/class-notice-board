@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-mac:
-    runs-on: macos-13
+    runs-on: macos-latest
     permissions:
       contents: write
 
@@ -31,6 +31,17 @@ jobs:
         working-directory: classroom
         run: npm ci
 
+      - name: Patch dmg-builder to use force detach
+        working-directory: classroom
+        run: |
+          DMG_JS="node_modules/dmg-builder/out/dmg.js"
+          if [ -f "$DMG_JS" ]; then
+            sed -i '' 's/"detach", "-quiet"/"detach", "-force", "-quiet"/g' "$DMG_JS"
+            echo "Patched: $(grep -c 'force' $DMG_JS) occurrence(s)"
+          else
+            echo "dmg.js not found, skipping patch"
+          fi
+
       - name: Configure git
         if: ${{ inputs.bump_version }}
         run: |
@@ -48,10 +59,6 @@ jobs:
           git commit -m "chore: bump to v${VERSION} [skip ci]"
           git tag "v${VERSION}"
           git push origin HEAD:main --tags
-
-      - name: Detach stale DMG volumes
-        run: |
-          hdiutil info | grep '/Volumes/' | awk '{print $NF}' | xargs -I{} hdiutil detach "{}" -force 2>/dev/null || true
 
       - name: Build Mac installer
         working-directory: classroom
