@@ -222,7 +222,7 @@ export default function LandingPage() {
             在教室电脑上安装客户端，与服务器绑定后即可接收通知。
           </p>
           <div className="l-download-btns">
-            <a className="l-dl-btn" href="https://cnb.992498.xyz/downloads/%E7%8F%AD%E7%BA%A7%E9%80%9A%E7%9F%A5%E5%B1%8F-Setup-v1.0.6.exe" download>
+            <a className="l-dl-btn" href="https://cnb.992498.xyz/downloads/%E7%8F%AD%E7%BA%A7%E9%80%9A%E7%9F%A5%E5%B1%8F-Setup-v1.0.7.exe" download>
               <span className="l-dl-btn-icon" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M1 2.9L8.3 1.9V9.4H1V2.9Z" fill="#00A4EF" />
