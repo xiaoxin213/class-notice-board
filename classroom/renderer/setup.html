@@ -194,7 +194,9 @@ async function doBind() {
     msg.textContent = '绑定成功！班级：' + res.className;
     cfg.serverUrl = serverUrl;
   } catch(e) {
-    msg.className='msg err'; msg.textContent = e.message;
+    const raw = e.message || '未知错误';
+    const clean = raw.replace(/^Error invoking remote method '[^']+': Error:\s*/, '');
+    msg.className='msg err'; msg.textContent = clean || raw;
   } finally { btn.disabled = false; }
 }
 

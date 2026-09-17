@@ -48,7 +48,7 @@ function wsUrl() {
 
 function connectWs() {
   // 先摘掉旧连接的所有事件，再关闭，防止 close 事件触发 scheduleReconnect 与新连接竞争
-  if (ws) { ws.removeAllListeners(); ws.on('error',()=>{}); try { ws.close(); } catch {} ws=null; }
+  if (ws) { ws.removeAllListeners(); ws.on('error',()=>{}); try { ws.terminate(); } catch {} ws=null; }
   clearTimeout(reconnectTimer);
   reconnectIdx=0;
   const url = wsUrl();
@@ -178,7 +178,17 @@ function apiPost(baseUrl, urlPath, body) {
           } catch { reject(new Error('服务器返回格式异常')); }
         });
       });
-    req.on('error', ()=>reject(new Error('无法连接服务器，请检查地址'))); req.write(payload); req.end();
+    req.setTimeout(10000, () => { req.destroy(); reject(new Error('连接超时，请检查服务器地址和网络')); });
+    req.on('error', (err) => {
+      let msg;
+      if (err.code === 'ECONNREFUSED')   msg = '服务器拒绝连接，请确认服务器已启动';
+      else if (err.code === 'ENOTFOUND') msg = '无法解析服务器域名，请检查网络连接或服务器地址';
+      else if (err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED') msg = '连接超时，请检查网络和服务器地址';
+      else if (err.code === 'ECONNRESET') msg = '连接被重置，请稍后重试';
+      else msg = '无法连接服务器，请检查地址和网络（' + (err.code || err.message) + '）';
+      reject(new Error(msg));
+    });
+    req.write(payload); req.end();
   });
 }
 
