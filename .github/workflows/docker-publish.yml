@@ -36,7 +36,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: classroom-installer
-          path: classroom/dist/*.exe
+          # latest.yml / blockmap 供教室端自动更新使用，必须和安装包放在一起
+          path: |
+            classroom/dist/*.exe
+            classroom/dist/*.exe.blockmap
+            classroom/dist/latest.yml
           retention-days: 7
 
   # ── Job 2：构建 Docker 镜像并推送到 GHCR ────────────────────────────────────

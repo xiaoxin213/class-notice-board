@@ -52,10 +52,12 @@
 </div>
 <script>
 let timer = null;
+let ttsTimer = null;
 let currentId = null;
 
 function dismiss() {
   clearTimeout(timer);
+  clearTimeout(ttsTimer);
   window.speechSynthesis.cancel();
   if (currentId !== null) {
     window.cnb.notifyDone(currentId);
@@ -65,8 +67,17 @@ function dismiss() {
 
 document.getElementById('closeBtn').addEventListener('click', dismiss);
 
+// 主进程切换到另一种展示窗口时收起本窗口：停掉计时与播报，不重复回执
+window.cnb.on('notify:hide', () => {
+  clearTimeout(timer);
+  clearTimeout(ttsTimer);
+  window.speechSynthesis.cancel();
+  currentId = null;
+});
+
 window.cnb.on('notify:show', (notice) => {
   clearTimeout(timer);
+  clearTimeout(ttsTimer);
   window.speechSynthesis.cancel();
 
   currentId = notice.id;
@@ -82,7 +93,8 @@ window.cnb.on('notify:show', (notice) => {
     bar.style.width = '0%';
   }));
 
-  let remaining = notice.speakTimes || 1;
+  // speak=false：教师选择了静音，不播报
+  let remaining = notice.speak === false ? 0 : (notice.speakTimes || 1);
   function speak() {
     if (remaining <= 0) return;
     remaining--;
@@ -91,10 +103,11 @@ window.cnb.on('notify:show', (notice) => {
     const voices = window.speechSynthesis.getVoices();
     const zh = voices.find(v => v.lang.startsWith('zh'));
     if (zh) utt.voice = zh;
-    utt.onend = () => { if (remaining > 0) setTimeout(speak, 800); };
+    utt.onend = () => { if (remaining > 0) ttsTimer = setTimeout(speak, 800); };
     window.speechSynthesis.speak(utt);
   }
-  if (window.speechSynthesis.getVoices().length > 0) speak();
+  if (remaining <= 0) { /* 静音，不播报 */ }
+  else if (window.speechSynthesis.getVoices().length > 0) speak();
   else { window.speechSynthesis.onvoiceschanged = () => { speak(); window.speechSynthesis.onvoiceschanged = null; }; }
 
   timer = setTimeout(() => {

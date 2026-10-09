@@ -31,13 +31,6 @@
     font-size:13px; width:100%; outline:none; background:#fff;
   }
   input:focus { border-color:var(--yellow); box-shadow:0 0 0 2px #fde68a55; }
-  .radio-group { display:flex; gap:8px; }
-  .radio-btn {
-    flex:1; padding:8px; border:1px solid #d6d3d1; border-radius:6px;
-    text-align:center; cursor:pointer; font-size:12px; background:#fff; color:#57534e;
-    transition:all .15s;
-  }
-  .radio-btn.active { background:#fef3c7; border-color:var(--yellow); color:#92400e; font-weight:600; }
   .toggle-row { display:flex; align-items:center; justify-content:space-between; }
   .toggle { position:relative; width:44px; height:24px; cursor:pointer; }
   .toggle input { opacity:0; width:0; height:0; }
@@ -69,7 +62,7 @@
 </div>
 <div id="tabs">
   <div class="tab active" onclick="switchTab('bind')">绑定 / 状态</div>
-  <div class="tab" onclick="switchTab('settings')">显示设置</div>
+  <div class="tab" onclick="switchTab('settings')">系统设置</div>
 </div>
 <div class="body">
 
@@ -88,9 +81,10 @@
     </div>
     <div class="card" id="bind-card">
       <div class="card-title" id="bind-card-title">首次绑定</div>
-      <div class="form-group">
-        <label>服务器地址</label>
-        <input type="url" id="serverUrl" placeholder="http://192.168.1.100:3210">
+      <!-- 仅本地开发（npm start）显示；正式安装包固定连接线上服务器 -->
+      <div class="form-group" id="server-group" style="display:none">
+        <label>服务器地址（开发模式）</label>
+        <input type="url" id="serverUrl" placeholder="http://localhost:3210">
       </div>
       <div class="form-group" style="margin-bottom:16px">
         <label>绑定码（教师端生成的6位数字）</label>
@@ -101,22 +95,8 @@
     </div>
   </div>
 
-  <!-- 显示设置面板 -->
+  <!-- 系统设置面板（通知展示方式、是否播报改由教师发布时选择） -->
   <div id="pane-settings" class="pane">
-    <div class="card">
-      <div class="card-title">通知展示方式</div>
-      <div class="radio-group">
-        <div class="radio-btn" id="mode-fullscreen" onclick="setMode('fullscreen')">
-          &#x1F5A5; 全屏覆盖
-        </div>
-        <div class="radio-btn" id="mode-toast" onclick="setMode('toast')">
-          &#x1F514; 右下角浮窗
-        </div>
-      </div>
-      <div style="margin-top:8px;font-size:11px;color:#78716c">
-        全屏：最醒目，适合课间；浮窗：不影响投影/上课
-      </div>
-    </div>
     <div class="card">
       <div class="card-title">系统</div>
       <div class="toggle-row">
@@ -126,6 +106,17 @@
           <span class="slider"></span>
         </label>
       </div>
+      <div style="margin-top:8px;font-size:11px;color:#78716c">
+        通知的展示方式（全屏 / 浮窗）和是否语音播报，由老师发布通知时选择。
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">版本</div>
+      <div class="toggle-row">
+        <span style="font-size:13px" id="app-version">—</span>
+        <span onclick="checkUpdate()" style="font-size:12px;color:#a16207;cursor:pointer;text-decoration:underline">检查更新</span>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:#78716c" id="update-text"></div>
     </div>
   </div>
 
@@ -136,8 +127,11 @@ let cfg = {};
 async function init() {
   cfg = await window.cnb.config.get();
   document.getElementById('serverUrl').value = cfg.serverUrl || '';
+  document.getElementById('server-group').style.display = cfg.serverEditable ? '' : 'none';
   document.getElementById('autoStart').checked = cfg.autoStart !== false;
-  setModeUI(cfg.displayMode || 'fullscreen');
+  const info = await window.cnb.app.info();
+  document.getElementById('app-version').textContent = '当前版本 v' + info.version;
+  updateUpdateUI(info.update);
   updateStatus({ connected: false });
   const st = await window.cnb.ws.status();
   updateStatus(st);
@@ -159,8 +153,9 @@ function updateStatus(st) {
     bindTitle.textContent = '重新绑定';
   } else {
     dot.className = 'dot dot-off';
-    txt.textContent = '未连接（重连中…）';
-    info.textContent = cfg.serverUrl ? '服务器：' + cfg.serverUrl : '';
+    txt.textContent = cfg.deviceToken ? '未连接（重连中…）' : '未绑定';
+    // 正式包只显示连接状态，不暴露服务器地址；开发模式显示当前连的地址便于排查
+    info.textContent = cfg.serverEditable && cfg.serverUrl ? '服务器：' + cfg.serverUrl : '';
     bindCard.style.display = '';
     rebindLink.style.display = 'none';
     bindTitle.textContent = '首次绑定';
@@ -182,17 +177,21 @@ function switchTab(id) {
 }
 
 async function doBind() {
-  const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  const serverUrl = cfg.serverEditable
+    ? document.getElementById('serverUrl').value.trim().replace(/\/$/, '')
+    : '';   // 正式包由主进程决定地址
   const bindCode  = document.getElementById('bindCode').value.trim();
   const msg = document.getElementById('bind-msg');
   const btn = document.getElementById('bindBtn');
-  if (!serverUrl || !bindCode) { msg.className='msg err'; msg.textContent='请填写服务器地址和绑定码'; return; }
+  if (cfg.serverEditable && !serverUrl) { msg.className='msg err'; msg.textContent='请填写服务器地址'; return; }
+  if (!/^\d{6}$/.test(bindCode)) { msg.className='msg err'; msg.textContent='请输入 6 位数字绑定码'; return; }
   btn.disabled = true; msg.className='msg'; msg.textContent='绑定中…';
   try {
     const res = await window.cnb.device.bind({ serverUrl, bindCode });
     msg.className='msg ok';
     msg.textContent = '绑定成功！班级：' + res.className;
-    cfg.serverUrl = serverUrl;
+    cfg.deviceToken = cfg.deviceToken || 'bound';
+    if (cfg.serverEditable) cfg.serverUrl = serverUrl;
   } catch(e) {
     const raw = e.message || '未知错误';
     const clean = raw.replace(/^Error invoking remote method '[^']+': Error:\s*/, '');
@@ -200,15 +199,23 @@ async function doBind() {
   } finally { btn.disabled = false; }
 }
 
-function setModeUI(mode) {
-  document.getElementById('mode-fullscreen').classList.toggle('active', mode==='fullscreen');
-  document.getElementById('mode-toast').classList.toggle('active', mode==='toast');
+function updateUpdateUI(u) {
+  const el = document.getElementById('update-text');
+  const map = {
+    idle:        '新版本会在后台自动下载，并在没有通知展示时自动安装',
+    checking:    '正在检查更新…',
+    latest:      '已是最新版本',
+    downloading: '正在下载新版本' + (u.version ? ' v' + u.version : '') + (u.percent != null ? '（' + u.percent + '%）' : '') + '…',
+    ready:       '新版本' + (u.version ? ' v' + u.version : '') + ' 已下载，空闲时自动安装并重启',
+    error:       '检查更新失败：' + (u.error || '未知错误'),
+    unsupported: '当前平台不支持自动更新，请手动下载安装新版',
+  };
+  el.textContent = map[u.status] || '';
 }
+window.cnb.on('update:status', updateUpdateUI);
 
-async function setMode(mode) {
-  cfg.displayMode = mode;
-  setModeUI(mode);
-  await window.cnb.config.save({ displayMode: mode });
+async function checkUpdate() {
+  updateUpdateUI(await window.cnb.app.checkUpdate());
 }
 
 async function setAutoStart(val) {

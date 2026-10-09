@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type {
-  Teacher, ClassItem, Device, Notice, BindCode,
+  Teacher, ClassItem, Device, Notice, BindCode, DisplayMode,
 } from '../api'
 import {
   getClasses, createClass, renameClass, deleteClass, genBindCode, getDevices,
@@ -25,6 +25,10 @@ const SPEAK_OPTIONS = [
   { label: '2次', value: 2 },
   { label: '3次', value: 3 },
 ]
+const MODE_OPTIONS: { label: string; value: DisplayMode }[] = [
+  { label: '全屏通知', value: 'fullscreen' },
+  { label: '浮窗通知', value: 'toast' },
+]
 const TEMPLATES = ['请到办公室', '到操场集合', '带作业本来办公室', '课代表来办公室']
 
 export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
@@ -37,6 +41,8 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
   const [content, setContent]         = useState('')
   const [displaySec, setDisplaySec]   = useState(60)
   const [speakTimes, setSpeakTimes]   = useState(2)
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('fullscreen')
+  const [speak, setSpeak]             = useState(true)
   const [sending, setSending]         = useState(false)
   const [sendMsg, setSendMsg]         = useState('')
   const [newName, setNewName]         = useState('')
@@ -89,8 +95,10 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
     if (!selected) return
     setSending(true); setSendMsg('')
     try {
-      const r = await publishNotice(selected.id, content, displaySec, speakTimes)
-      setSendMsg(r.online > 0 ? `已发出，${r.sentTo} 台教室端在线` : '已发出（当前无教室端在线，设备上线后自动补发）')
+      const r = await publishNotice(selected.id, content, { displaySeconds: displaySec, speakTimes, displayMode, speak })
+      let msg = r.online > 0 ? `已发出，${r.sentTo} 台教室端在线` : '已发出（当前无教室端在线，设备上线后自动补发）'
+      if (r.legacyOnline > 0) msg += `；其中 ${r.legacyOnline} 台为旧版，将按其本地设置展示`
+      setSendMsg(msg)
       setContent('')
       getNotices(selected.id).then(r => setNotices(r.notices)).catch(() => {})
     } catch (err: any) {
@@ -134,6 +142,9 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
     clearToken()
     onLogout()
   }
+
+  // 旧版教室端（不上报版本号）不认识展示方式/静音选项
+  const legacyOnline = devices.filter(d => d.online && !d.client_version).length
 
   const expireStr = bindCode
     ? new Date(bindCode.expireAt * 1000).toLocaleString('zh-CN', { hour12: false })
@@ -293,16 +304,46 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
                   </div>
                 </div>
                 <div className="ws-option-group">
-                  <span className="ws-option-label">播报次数</span>
+                  <span className="ws-option-label">展示方式</span>
                   <div className="ws-option-btns">
-                    {SPEAK_OPTIONS.map(o => (
+                    {MODE_OPTIONS.map(o => (
                       <button key={o.value} type="button"
-                        className={`ws-option-btn ${speakTimes===o.value?'active':''}`}
-                        onClick={() => setSpeakTimes(o.value)}>{o.label}</button>
+                        className={`ws-option-btn ${displayMode===o.value?'active':''}`}
+                        onClick={() => setDisplayMode(o.value)}>{o.label}</button>
                     ))}
                   </div>
                 </div>
               </div>
+
+              <div className="ws-options-row">
+                <div className="ws-option-group">
+                  <span className="ws-option-label">语音播报</span>
+                  <div className="ws-option-btns">
+                    <button type="button" className={`ws-option-btn ${speak?'active':''}`}
+                      onClick={() => setSpeak(true)}>播报</button>
+                    <button type="button" className={`ws-option-btn ${!speak?'active':''}`}
+                      onClick={() => setSpeak(false)}>静音</button>
+                  </div>
+                </div>
+                {speak && (
+                  <div className="ws-option-group">
+                    <span className="ws-option-label">播报次数</span>
+                    <div className="ws-option-btns">
+                      {SPEAK_OPTIONS.map(o => (
+                        <button key={o.value} type="button"
+                          className={`ws-option-btn ${speakTimes===o.value?'active':''}`}
+                          onClick={() => setSpeakTimes(o.value)}>{o.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {legacyOnline > 0 && (
+                <p className="ws-legacy-hint">
+                  本班有 {legacyOnline} 台在线设备是旧版教室端，会按设备本地设置展示，且无法静音。请联系管理员升级。
+                </p>
+              )}
 
               {sendMsg && (
                 <p className={`ws-send-msg ${sendMsg.startsWith('发送失败')?'err':''}`}>{sendMsg}</p>
@@ -327,6 +368,9 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
                     <div className="ws-notice-meta">
                       <span>{n.publisher}</span>
                       <span>{new Date(n.created_at*1000).toLocaleString('zh-CN',{hour12:false})}</span>
+                      <span className="ws-notice-tag">
+                        {n.display_mode==='toast'?'浮窗':'全屏'} · {n.speak===0?'静音':`播报${n.speak_times}次`}
+                      </span>
                       <span className={`ws-notice-status ws-status-${n.status}`}>
                         {n.status==='pending'?'待送达':n.status==='delivered'?'已送达':'已过期'}
                       </span>
@@ -383,6 +427,9 @@ export default function WorkspacePage({ teacher, onLogout, onAdmin }: Props) {
                           <span className={`dot ${d.online?'dot-online':'dot-offline'}`} />
                           <span className="ws-device-name">{d.name}</span>
                           <span className="ws-device-status">{d.online?'在线':'离线'}</span>
+                          {d.client_version
+                            ? <span className="ws-device-ver">v{d.client_version}</span>
+                            : <span className="ws-device-ver legacy" title="旧版教室端：不支持发布时选择展示方式和静音">旧版·需升级</span>}
                           {!d.online && d.last_seen_at && (
                             <span className="ws-device-seen">
                               {new Date(d.last_seen_at*1000).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}

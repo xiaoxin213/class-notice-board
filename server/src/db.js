@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS device (
   token_hash   TEXT    NOT NULL UNIQUE,
   name         TEXT    NOT NULL DEFAULT '教室电脑',
   last_seen_at INTEGER,
+  client_version     TEXT,
+  upgrade_prompted_at INTEGER,
   created_at   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_device_class ON device(class_id);
@@ -50,6 +52,8 @@ CREATE TABLE IF NOT EXISTS notice (
   content         TEXT    NOT NULL,
   display_seconds INTEGER NOT NULL DEFAULT 60,
   speak_times     INTEGER NOT NULL DEFAULT 2,
+  display_mode    TEXT    NOT NULL DEFAULT 'fullscreen',
+  speak           INTEGER NOT NULL DEFAULT 1,
   expire_at       INTEGER NOT NULL,
   status          TEXT    NOT NULL DEFAULT 'pending',
   created_at      INTEGER NOT NULL
@@ -79,13 +83,18 @@ export function openDb(dataDir) {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA);
 
-  // 迁移：旧库没有 disabled 列时自动补上
-  try {
-    const cols = db.prepare('PRAGMA table_info(teacher)').all();
-    if (!cols.find(c => c.name === 'disabled')) {
-      db.exec('ALTER TABLE teacher ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
-    }
-  } catch {}
+  // 迁移：旧库缺列时自动补上（只加列，不改已有数据）
+  const addColumn = (table, column, ddl) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!cols.find((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  };
+  addColumn('teacher', 'disabled', 'INTEGER NOT NULL DEFAULT 0');
+  // 通知展示方式与语音播报改由教师发布时决定
+  addColumn('notice', 'display_mode', "TEXT NOT NULL DEFAULT 'fullscreen'");
+  addColumn('notice', 'speak', 'INTEGER NOT NULL DEFAULT 1');
+  // 教室端版本：旧版客户端不上报版本号，此列为 NULL
+  addColumn('device', 'client_version', 'TEXT');
+  addColumn('device', 'upgrade_prompted_at', 'INTEGER');
 
   // node:sqlite 没有 transaction()，补上一个与 better-sqlite3 API 兼容的实现
   db.transaction = (fn) => (...args) => {

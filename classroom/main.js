@@ -10,7 +10,24 @@ const { WebSocket } = require('ws');
 
 // ─── 常量 ──────────────────────────────────────────────────────────────────
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
+
+// ─── 服务器地址 ──────────────────────────────────────────────────────────────
+// 正式安装包固定连线上服务器，教室里无需配置；npm start 本地开发时才可在设置页填写地址。
+// 特殊情况可用环境变量 CNB_SERVER_URL 覆盖（如用安装包连测试服）。
+const PROD_SERVER_URL = 'https://cnb.992498.xyz';
+const DEV_SERVER_URL  = 'http://localhost:3210';
+const IS_DEV = !app.isPackaged;
+const ENV_SERVER_URL = String(process.env.CNB_SERVER_URL || '').trim().replace(/\/+$/, '');
+const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
+function serverUrl() {
+  if (ENV_SERVER_URL) return ENV_SERVER_URL;
+  return IS_DEV ? (normUrl(config.serverUrl) || DEV_SERVER_URL) : PROD_SERVER_URL;
+}
+const serverEditable = () => IS_DEV && !ENV_SERVER_URL;
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+const UPDATE_FIRST_CHECK_MS = 30 * 1000;          // 启动 30 秒后第一次检查更新
+const UPDATE_CHECK_INTERVAL_MS = 4 * 3600 * 1000; // 之后每 4 小时检查一次
+const UPDATE_RETRY_IDLE_MS = 60 * 1000;           // 有通知在展示时，推迟 1 分钟再安装
 
 // ─── 配置 ──────────────────────────────────────────────────────────────────
 function loadConfig() {
@@ -18,11 +35,13 @@ function loadConfig() {
     const saved = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
     // 旧配置可能没有 autoStart 字段，确保默认为 true
     if (typeof saved.autoStart !== 'boolean') saved.autoStart = true;
+    // 展示方式改由教师发布时决定，旧配置里的 displayMode 不再使用
+    delete saved.displayMode;
     return saved;
   }
   catch {
     return { serverUrl:'', deviceToken:'', deviceId:null, classId:null,
-             className:'', deviceName:'教室电脑', displayMode:'fullscreen', autoStart:true };
+             className:'', deviceName:'教室电脑', autoStart:true };
   }
 }
 function saveConfig(cfg) {
@@ -39,11 +58,14 @@ const iconApp     = nativeImage.createFromBuffer(Buffer.from('iVBORw0KGgoAAAANSU
 // ─── 全局引用 ────────────────────────────────────────────────────────────────
 let tray=null, setupWin=null, overlayWin=null, toastWin=null;
 let ws=null, wsConnected=false, reconnectIdx=0, reconnectTimer=null;
+let activeNoticeWin=null, noticeUntil=0;   // 当前展示中的通知窗口，用于判断能否静默安装更新
 
 // ─── WebSocket ──────────────────────────────────────────────────────────────
 function wsUrl() {
-  if (!config.serverUrl || !config.deviceToken) return null;
-  return config.serverUrl.replace(/^http/,'ws') + '/ws/device?token=' + encodeURIComponent(config.deviceToken);
+  if (!config.deviceToken) return null;
+  // https → wss，http → ws；v=版本号：服务端据此区分新旧客户端（旧版不带此参数）
+  return serverUrl().replace(/^http/,'ws') + '/ws/device?token=' + encodeURIComponent(config.deviceToken)
+    + '&v=' + encodeURIComponent(app.getVersion());
 }
 
 function connectWs() {
@@ -98,16 +120,71 @@ function broadcastStatus() {
 }
 
 // ─── 通知展示 ────────────────────────────────────────────────────────────────
+// 展示方式与是否播报由教师发布时决定（帧里的 displayMode / speak），缺省为全屏 + 播报
 function showNotice(notice) {
-  if (config.displayMode==='fullscreen') {
-    if (!overlayWin||overlayWin.isDestroyed()) createOverlayWin();
-    overlayWin.webContents.send('notify:show', notice);
-    overlayWin.show(); overlayWin.setAlwaysOnTop(true,'screen-saver'); overlayWin.focus();
-  } else {
-    if (!toastWin||toastWin.isDestroyed()) createToastWin();
-    toastWin.webContents.send('notify:show', notice);
-    toastWin.show(); toastWin.setAlwaysOnTop(true,'screen-saver');
-  }
+  const toast = notice.displayMode === 'toast';
+  if (toast) { if (!toastWin||toastWin.isDestroyed()) createToastWin(); }
+  else       { if (!overlayWin||overlayWin.isDestroyed()) createOverlayWin(); }
+  const win   = toast ? toastWin : overlayWin;
+  const other = toast ? overlayWin : toastWin;
+  // 同一时间只展示一条：另一种窗口里若还有通知，先收起
+  if (other && !other.isDestroyed() && other.isVisible()) { other.webContents.send('notify:hide'); other.hide(); }
+
+  win.webContents.send('notify:show', { ...notice, speak: notice.speak !== false });
+  win.show(); win.setAlwaysOnTop(true,'screen-saver');
+  if (!toast) win.focus();
+  activeNoticeWin = win;
+  noticeUntil = Date.now() + ((notice.displaySeconds || 60) + 5) * 1000;
+}
+
+function isShowingNotice() {
+  // noticeUntil 兜底：渲染进程异常没回 notify:done 时，也不会永远卡住更新
+  return !!activeNoticeWin && Date.now() < noticeUntil;
+}
+
+// ─── 静默更新（electron-updater，从本服务器的 /downloads/ 拉取）─────────────────
+// Windows NSIS 与 Linux AppImage 支持；macOS 未签名无法自动更新，跳过。
+let autoUpdater=null, installTimer=null;
+const updateState = { status:'idle', version:null, percent:null, error:null };
+
+function setUpdate(status, extra={}) {
+  Object.assign(updateState, { status, percent:null, error:null }, extra);
+  setupWin?.webContents.send('update:status', { ...updateState });
+}
+
+function updaterSupported() {
+  return app.isPackaged && (process.platform==='win32' || (process.platform==='linux' && !!process.env.APPIMAGE));
+}
+
+function setupUpdater() {
+  if (!updaterSupported()) { setUpdate('unsupported'); return; }
+  try { ({ autoUpdater } = require('electron-updater')); }
+  catch { setUpdate('unsupported'); return; }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;   // 兜底：即使没找到空闲时机，下次退出时也会装上
+  autoUpdater.on('checking-for-update', () => setUpdate('checking'));
+  autoUpdater.on('update-available', (i) => setUpdate('downloading', { version:i.version }));
+  autoUpdater.on('update-not-available', () => setUpdate('latest'));
+  autoUpdater.on('download-progress', (p) => setUpdate('downloading', { version:updateState.version, percent:Math.round(p.percent) }));
+  autoUpdater.on('update-downloaded', (i) => { setUpdate('ready', { version:i.version }); installWhenIdle(); });
+  autoUpdater.on('error', (e) => setUpdate('error', { error:String(e?.message || e) }));
+  setTimeout(checkForUpdates, UPDATE_FIRST_CHECK_MS);
+  setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL_MS);
+}
+
+function checkForUpdates() {
+  if (!autoUpdater) return;
+  if (updateState.status==='downloading' || updateState.status==='ready') return;
+  // 更新源跟随绑定的服务器地址，换绑服务器后自动切换
+  autoUpdater.setFeedURL({ provider:'generic', url:serverUrl() + '/downloads/' });
+  autoUpdater.checkForUpdates().catch((e) => setUpdate('error', { error:String(e?.message || e) }));
+}
+
+// 下载完成后，等没有通知在展示时静默安装并自动重启（重启期间错过的通知由服务端在 TTL 内补投）
+function installWhenIdle() {
+  clearTimeout(installTimer);
+  if (isShowingNotice()) { installTimer = setTimeout(installWhenIdle, UPDATE_RETRY_IDLE_MS); return; }
+  autoUpdater.quitAndInstall(true, true);   // isSilent=true, forceRunAfter=true
 }
 
 // ─── 窗口 ────────────────────────────────────────────────────────────────────
@@ -141,24 +218,32 @@ function createToastWin() {
 }
 
 // ─── IPC ─────────────────────────────────────────────────────────────────────
-ipcMain.handle('config:get', () => ({...config}));
-ipcMain.handle('config:save', (_, updates) => {
-  const needReconnect = updates.serverUrl!==config.serverUrl || updates.deviceToken!==config.deviceToken;
+// serverUrl 返回实际生效的地址；serverEditable 为 false 时设置页不显示地址输入框
+ipcMain.handle('config:get', () => ({ ...config, serverUrl:serverUrl(), serverEditable:serverEditable() }));
+ipcMain.handle('config:save', (_, updates={}) => {
+  if (!serverEditable()) delete updates.serverUrl;   // 正式包不允许改服务器地址
+  const before = { url:serverUrl(), token:config.deviceToken };
   Object.assign(config, updates); saveConfig(config);
+  const needReconnect = serverUrl()!==before.url || config.deviceToken!==before.token;
   if (typeof updates.autoStart==='boolean') app.setLoginItemSettings({openAtLogin:updates.autoStart,path:app.getPath('exe'),name:'班级通知屏'});
   if (needReconnect) connectWs();
   return {ok:true};
 });
-ipcMain.handle('device:bind', async (_, {serverUrl, bindCode}) => {
+ipcMain.handle('device:bind', async (_, {serverUrl:inputUrl, bindCode}) => {
   const deviceName = require('os').hostname();
-  const data = await apiPost(serverUrl, '/api/device/bind', {code:bindCode, deviceName});
-  Object.assign(config, {serverUrl, deviceToken:data.deviceToken, deviceId:data.deviceId,
+  // 开发模式用设置页填写的地址；正式包始终用线上地址
+  const base = serverEditable() && normUrl(inputUrl) ? normUrl(inputUrl) : serverUrl();
+  const data = await apiPost(base, '/api/device/bind', {code:bindCode, deviceName});
+  if (serverEditable()) config.serverUrl = base;
+  Object.assign(config, {deviceToken:data.deviceToken, deviceId:data.deviceId,
     classId:data.classId, className:data.className, deviceName});
   saveConfig(config); connectWs();
   return {className:data.className};
 });
 ipcMain.handle('ws:status', () => ({connected:wsConnected,deviceId:config.deviceId,classId:config.classId,className:config.className}));
-ipcMain.on('notify:done', (_, id) => { overlayWin?.hide(); toastWin?.hide(); });
+ipcMain.on('notify:done', (_, id) => { overlayWin?.hide(); toastWin?.hide(); activeNoticeWin=null; });
+ipcMain.handle('app:info', () => ({ version:app.getVersion(), update:{ ...updateState } }));
+ipcMain.handle('update:check', () => { checkForUpdates(); return { ...updateState }; });
 
 // ─── HTTP 辅助 ────────────────────────────────────────────────────────────────
 function apiPost(baseUrl, urlPath, body) {
@@ -209,6 +294,7 @@ app.whenReady().then(() => {
   if (config.deviceToken) connectWs();
   createOverlayWin();
   createToastWin();
+  setupUpdater();
 });
 
 app.on('window-all-closed', e=>e.preventDefault());

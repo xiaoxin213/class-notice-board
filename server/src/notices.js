@@ -9,17 +9,53 @@ function noticeFrame(notice, publisherName) {
     publisher: publisherName,
     publishedAt: notice.created_at,
     displaySeconds: notice.display_seconds,
+    // 新版客户端读取以下两个字段；旧版客户端会忽略，按本地设置展示并播报 speakTimes 次
+    displayMode: notice.display_mode ?? 'fullscreen',
+    speak: notice.speak !== 0,
     speakTimes: notice.speak_times,
     expireAt: notice.expire_at,
   };
 }
 
-export function publishNotice(db, hub, config, { classId, teacherId, content, displaySeconds, speakTimes }) {
+/** 发给旧版客户端的升级提示，借用 notice 帧（id=0，旧版回执时服务端会忽略） */
+export const UPGRADE_PROMPT_TEXT = '教室端有新版本，请联系管理员安装新版客户端。';
+function upgradePromptFrame() {
+  return {
+    type: 'notice',
+    id: 0,
+    content: UPGRADE_PROMPT_TEXT,
+    publisher: '系统',
+    publishedAt: now(),
+    displaySeconds: 20,
+    displayMode: 'toast',
+    speak: false,
+    speakTimes: 1,
+    expireAt: now() + 60,
+  };
+}
+
+/**
+ * 旧版设备上线且本次没有补投通知时，推一次升级提示；每台设备 24 小时内最多一次。
+ * 有补投时不推：旧版客户端只有一个展示窗口，后到的帧会顶掉正在展示的真实通知。
+ */
+export function maybePromptUpgrade(db, hub, deviceId) {
+  const row = db.prepare('SELECT upgrade_prompted_at FROM device WHERE id = ?').get(deviceId);
+  if (!row || (row.upgrade_prompted_at && row.upgrade_prompted_at > now() - 24 * 3600)) return false;
+  if (!hub.sendToDevice(deviceId, upgradePromptFrame())) return false;
+  db.prepare('UPDATE device SET upgrade_prompted_at = ? WHERE id = ?').run(now(), deviceId);
+  return true;
+}
+
+export function publishNotice(db, hub, config, {
+  classId, teacherId, content, displaySeconds, speakTimes, displayMode = 'fullscreen', speak = true,
+}) {
   const ts = now();
   const info = db.prepare(`
-    INSERT INTO notice (class_id, publisher_id, content, display_seconds, speak_times, expire_at, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-  `).run(classId, teacherId, content, displaySeconds, speakTimes, ts + config.noticeTtlSeconds, ts);
+    INSERT INTO notice (class_id, publisher_id, content, display_seconds, speak_times, display_mode, speak,
+                        expire_at, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+  `).run(classId, teacherId, content, displaySeconds, speakTimes, displayMode, speak ? 1 : 0,
+    ts + config.noticeTtlSeconds, ts);
 
   const notice = db.prepare('SELECT * FROM notice WHERE id = ?').get(info.lastInsertRowid);
   const publisher = db.prepare('SELECT display_name FROM teacher WHERE id = ?').get(teacherId);

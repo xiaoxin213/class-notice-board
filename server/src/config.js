@@ -25,6 +25,8 @@ export function loadConfig(env = process.env) {
     maxNoticeLength: int(env.MAX_NOTICE_LENGTH, 200),
     heartbeatIntervalMs: int(env.HEARTBEAT_INTERVAL_MS, 25_000),
     offlineTimeoutMs: int(env.OFFLINE_TIMEOUT_MS, 60_000),
+    // 旧版教室端（不上报版本号）上线时，每天最多推送一次"请升级"提示；设为 0 关闭
+    legacyUpgradePrompt: env.LEGACY_UPGRADE_PROMPT !== '0',
     // 静态文件目录，生产环境设为 web/dist 的路径
     webRoot: env.WEB_ROOT || '',
   };

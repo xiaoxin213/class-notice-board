@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import { WebSocketServer } from 'ws';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { join, normalize, extname } from 'node:path';
 import { now } from './db.js';
 import {
@@ -8,7 +9,9 @@ import {
   newDeviceToken, hashDeviceToken, newBindCode,
 } from './auth.js';
 import { Hub } from './hub.js';
-import { publishNotice, deliverPending, ackNotice, expireStaleNotices } from './notices.js';
+import {
+  publishNotice, deliverPending, ackNotice, expireStaleNotices, maybePromptUpgrade,
+} from './notices.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -233,7 +236,7 @@ export function buildApp(db, config, { logger = false } = {}) {
   app.get('/api/classes/:id/devices', { preHandler: requireTeacher }, async (req, reply) => {
     const classId = Number(req.params.id);
     if (!canAccessClass(req.teacher.id, classId)) return reply.code(403).send({ error: '无权操作该班级' });
-    const rows = db.prepare('SELECT id, name, last_seen_at FROM device WHERE class_id = ?').all(classId);
+    const rows = db.prepare('SELECT id, name, last_seen_at, client_version FROM device WHERE class_id = ?').all(classId);
     return { devices: rows.map((d) => ({ ...d, online: hub.isOnline(d.id) })) };
   });
 
@@ -266,19 +269,27 @@ export function buildApp(db, config, { logger = false } = {}) {
       return reply.code(400).send({ error: `通知内容最多 ${config.maxNoticeLength} 字` });
     }
     const displaySeconds = Math.min(Math.max(Number(req.body?.displaySeconds) || 60, 5), 3600);
-    const speakTimes = Math.min(Math.max(Number(req.body?.speakTimes) || 2, 0), 10);
+    const speakTimes = Math.min(Math.max(Number(req.body?.speakTimes) || 2, 1), 10);
+    // 展示方式、是否播报由教师发布时决定，默认全屏 + 播报
+    const displayMode = req.body?.displayMode === 'toast' ? 'toast' : 'fullscreen';
+    const speak = req.body?.speak !== false;
 
     const { notice, sentTo } = publishNotice(db, hub, config, {
-      classId, teacherId: req.teacher.id, content, displaySeconds, speakTimes,
+      classId, teacherId: req.teacher.id, content, displaySeconds, speakTimes, displayMode, speak,
     });
-    return reply.code(201).send({ id: notice.id, sentTo, online: hub.onlineCount(classId) });
+    return reply.code(201).send({
+      id: notice.id, sentTo, online: hub.onlineCount(classId),
+      // 在线旧版设备数：这些设备会忽略展示方式/播报开关，前端据此提示教师
+      legacyOnline: hub.legacyOnlineCount(classId),
+    });
   });
 
   app.get('/api/notices', { preHandler: requireTeacher }, async (req, reply) => {
     const classId = Number(req.query?.classId);
     if (!canAccessClass(req.teacher.id, classId)) return reply.code(403).send({ error: '无权操作该班级' });
     const rows = db.prepare(`
-      SELECT n.id, n.content, n.status, n.created_at, n.display_seconds, n.speak_times, t.display_name AS publisher
+      SELECT n.id, n.content, n.status, n.created_at, n.display_seconds, n.speak_times,
+             n.display_mode, n.speak, t.display_name AS publisher
       FROM notice n JOIN teacher t ON t.id = n.publisher_id
       WHERE n.class_id = ? ORDER BY n.id DESC LIMIT 30
     `).all(classId);
@@ -425,9 +436,14 @@ export function buildApp(db, config, { logger = false } = {}) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       return socket.destroy();
     }
+    // 新版客户端在连接参数里带版本号 v=x.y.z；旧版不带，记为 NULL
+    const rawVersion = url.searchParams.get('v') ?? '';
+    const version = /^[0-9A-Za-z.+-]{1,32}$/.test(rawVersion) ? rawVersion : null;
+
     wss.handleUpgrade(request, socket, head, (ws) => {
-      hub.attachDevice(device.id, device.class_id, ws);
-      db.prepare('UPDATE device SET last_seen_at = ? WHERE id = ?').run(now(), device.id);
+      hub.attachDevice(device.id, device.class_id, ws, version);
+      db.prepare('UPDATE device SET last_seen_at = ?, client_version = ? WHERE id = ?')
+        .run(now(), version, device.id);
 
       const cls = db.prepare('SELECT name FROM class WHERE id = ?').get(device.class_id);
       ws.send(JSON.stringify({
@@ -436,7 +452,10 @@ export function buildApp(db, config, { logger = false } = {}) {
       hub.notifyClassTeachers(device.class_id, {
         type: 'device_status', classId: device.class_id, online: hub.onlineCount(device.class_id),
       });
-      deliverPending(db, hub, device.id, device.class_id);
+      const redelivered = deliverPending(db, hub, device.id, device.class_id);
+      if (!version && config.legacyUpgradePrompt && redelivered === 0) {
+        maybePromptUpgrade(db, hub, device.id);
+      }
 
       ws.on('message', (raw) => {
         let msg;
@@ -470,12 +489,25 @@ export function buildApp(db, config, { logger = false } = {}) {
       } catch {
         file = join(config.webRoot, 'index.html'); // SPA 回退
       }
-      try {
-        const body = await readFile(file);
-        return reply.type(MIME[extname(file)] ?? 'application/octet-stream').send(body);
-      } catch {
-        return reply.code(404).send({ error: 'not found' });
+      let info;
+      try { info = await stat(file); } catch { return reply.code(404).send({ error: 'not found' }); }
+      reply.type(MIME[extname(file)] ?? 'application/octet-stream').header('Accept-Ranges', 'bytes');
+      // 安装包几十 MB，必须流式输出：整读进内存在多台教室同时自动更新时会撑爆容器内存
+      // 支持单段 Range，便于断点续传；多段 Range 直接回整个文件（更新器会自动退回整包下载）
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+      if (m && (m[1] || m[2])) {
+        let start = m[1] ? Number(m[1]) : Math.max(info.size - Number(m[2]), 0);
+        let end = m[1] && m[2] ? Math.min(Number(m[2]), info.size - 1) : info.size - 1;
+        if (start > end || start >= info.size) {
+          return reply.code(416).header('Content-Range', `bytes */${info.size}`).send();
+        }
+        reply.code(206)
+          .header('Content-Range', `bytes ${start}-${end}/${info.size}`)
+          .header('Content-Length', end - start + 1);
+        return reply.send(createReadStream(file, { start, end }));
       }
+      reply.header('Content-Length', info.size);
+      return reply.send(createReadStream(file));
     });
   }
 

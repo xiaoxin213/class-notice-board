@@ -1,20 +1,21 @@
 {
   "name": "class-notice-board-classroom",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "班级通知屏 · 教室端",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64",
-    "build:mac": "electron-builder --mac --x64 --arm64",
-    "build:linux-x64": "electron-builder --linux --x64",
-    "build:linux-arm64": "electron-builder --linux --arm64",
-    "release": "npm version patch && electron-builder --win --x64",
-    "release:mac": "npm version patch --no-git-tag-version && electron-builder --mac --x64 --arm64",
-    "release:linux-x64": "npm version patch --no-git-tag-version && electron-builder --linux --x64",
-    "release:linux-arm64": "npm version patch --no-git-tag-version && electron-builder --linux --arm64"
+    "build": "electron-builder --win --x64 --publish never",
+    "build:mac": "electron-builder --mac --x64 --arm64 --publish never",
+    "build:linux-x64": "electron-builder --linux --x64 --publish never",
+    "build:linux-arm64": "electron-builder --linux --arm64 --publish never",
+    "release": "npm version patch && electron-builder --win --x64 --publish never",
+    "release:mac": "npm version patch --no-git-tag-version && electron-builder --mac --x64 --arm64 --publish never",
+    "release:linux-x64": "npm version patch --no-git-tag-version && electron-builder --linux --x64 --publish never",
+    "release:linux-arm64": "npm version patch --no-git-tag-version && electron-builder --linux --arm64 --publish never"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -80,6 +81,12 @@
       "renderer/**",
       "assets/**",
       "node_modules/**"
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "http://localhost/downloads/"
+      }
     ]
   }
 }

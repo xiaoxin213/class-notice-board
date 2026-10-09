@@ -8,16 +8,17 @@ export class Hub {
   constructor(db, config) {
     this.db = db;
     this.config = config;
-    this.devices = new Map();  // deviceId -> { ws, classId, lastSeen }
+    this.devices = new Map();  // deviceId -> { ws, classId, lastSeen, version }
     this.teachers = new Map(); // teacherId -> Set<ServerResponse>
     this.timer = null;
   }
 
   // ---- 教室端 ----
 
-  attachDevice(deviceId, classId, ws) {
+  /** version 为 null 表示旧版客户端（不上报版本号） */
+  attachDevice(deviceId, classId, ws, version = null) {
     this.devices.get(deviceId)?.ws.close(4000, 'replaced');
-    this.devices.set(deviceId, { ws, classId, lastSeen: Date.now() });
+    this.devices.set(deviceId, { ws, classId, lastSeen: Date.now(), version });
   }
 
   detachDevice(deviceId, ws) {
@@ -42,6 +43,13 @@ export class Hub {
 
   onlineCount(classId) {
     return this.onlineDeviceIds(classId).length;
+  }
+
+  /** 在线的旧版设备数：它们不认识 displayMode / speak 字段，会按本地设置展示 */
+  legacyOnlineCount(classId) {
+    let n = 0;
+    for (const e of this.devices.values()) if (e.classId === classId && !e.version) n += 1;
+    return n;
   }
 
   sendToDevice(deviceId, frame) {

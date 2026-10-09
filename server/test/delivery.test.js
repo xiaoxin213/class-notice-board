@@ -63,14 +63,16 @@ async function setup(t, overrides = {}) {
   return {
     ctx, classId, auth, base, sockets,
 
-    async bindDevice() {
+    /** version 默认模拟新版客户端；传 null 模拟不上报版本号的旧版客户端 */
+    async bindDevice({ version = '1.1.0', deviceName = '五一班教室机' } = {}) {
       const { code } = (await ctx.app.inject({
         method: 'POST', url: `/api/classes/${classId}/bind-code`, headers: auth,
       })).json();
       const bound = (await ctx.app.inject({
-        method: 'POST', url: '/api/device/bind', payload: { code, deviceName: '五一班教室机' },
+        method: 'POST', url: '/api/device/bind', payload: { code, deviceName },
       })).json();
-      const ws = connect(`${base}/ws/device?token=${bound.deviceToken}`);
+      const v = version ? `&v=${encodeURIComponent(version)}` : '';
+      const ws = connect(`${base}/ws/device?token=${bound.deviceToken}${v}`);
       sockets.push(ws);
       await waitFrame(ws, 'ready');
       return { ws, ...bound };
@@ -187,5 +189,124 @@ describe('教室端投递', () => {
     await new Promise((r) => setTimeout(r, 150));
     const body = await s.classes();
     assert.equal(body.classes.find((c) => c.id === s.classId).online, 1);
+  });
+});
+
+describe('发布时选择展示方式与语音播报', () => {
+  test('默认全屏 + 播报，帧里带上 displayMode / speak', async (t) => {
+    const s = await setup(t);
+    const { ws } = await s.bindDevice();
+    await s.publish('请到办公室。');
+    const frame = await waitFrame(ws, 'notice');
+    assert.equal(frame.displayMode, 'fullscreen');
+    assert.equal(frame.speak, true);
+    assert.equal(frame.speakTimes, 2);
+  });
+
+  test('可选浮窗 + 不播报，并写入发布记录', async (t) => {
+    const s = await setup(t);
+    const { ws } = await s.bindDevice();
+    await s.publish('明天带红领巾。', { displayMode: 'toast', speak: false });
+    const frame = await waitFrame(ws, 'notice');
+    assert.equal(frame.displayMode, 'toast');
+    assert.equal(frame.speak, false);
+
+    const list = (await s.ctx.app.inject({
+      url: `/api/notices?classId=${s.classId}`, headers: s.auth,
+    })).json();
+    const row = list.notices.find((n) => n.id === frame.id);
+    assert.equal(row.display_mode, 'toast');
+    assert.equal(row.speak, 0);
+  });
+
+  test('非法的展示方式按全屏处理', async (t) => {
+    const s = await setup(t);
+    const { ws } = await s.bindDevice();
+    await s.publish('到操场集合。', { displayMode: 'bogus' });
+    assert.equal((await waitFrame(ws, 'notice')).displayMode, 'fullscreen');
+  });
+
+  test('补投的通知同样保留发布时的展示方式', async (t) => {
+    const s = await setup(t);
+    await s.publish('课代表来办公室。', { displayMode: 'toast', speak: false });
+    const { ws } = await s.bindDevice();
+    const frame = await waitFrame(ws, 'notice');
+    assert.equal(frame.displayMode, 'toast');
+    assert.equal(frame.speak, false);
+  });
+});
+
+describe('新旧版本教室端兼容', () => {
+  test('设备列表返回客户端版本，旧版为 null', async (t) => {
+    const s = await setup(t);
+    await s.bindDevice({ version: '1.1.0', deviceName: '前屏' });
+    await s.bindDevice({ version: null, deviceName: '后屏' });
+    const { devices } = (await s.ctx.app.inject({
+      url: `/api/classes/${s.classId}/devices`, headers: s.auth,
+    })).json();
+    assert.equal(devices.find((d) => d.name === '前屏').client_version, '1.1.0');
+    assert.equal(devices.find((d) => d.name === '后屏').client_version, null);
+  });
+
+  test('发布结果返回在线旧版设备数', async (t) => {
+    const s = await setup(t);
+    await s.bindDevice({ version: '1.1.0', deviceName: '前屏' });
+    await s.bindDevice({ version: null, deviceName: '后屏' });
+    const body = (await s.publish('请到办公室。')).json();
+    assert.equal(body.online, 2);
+    assert.equal(body.legacyOnline, 1);
+  });
+
+  test('非法版本号按旧版处理', async (t) => {
+    const s = await setup(t);
+    await s.bindDevice({ version: '<script>' });
+    assert.equal((await s.publish('测试')).json().legacyOnline, 1);
+  });
+
+  test('旧版设备上线时收到一次升级提示（id=0），回执被忽略', async (t) => {
+    const s = await setup(t);
+    const { ws } = await s.bindDevice({ version: null });
+    const frame = await waitFrame(ws, 'notice');
+    assert.equal(frame.id, 0);
+    assert.match(frame.content, /新版本/);
+    ws.send(JSON.stringify({ type: 'ack', id: frame.id }));
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(ws.readyState, WebSocket.OPEN);
+  });
+
+  test('升级提示 24 小时内只推一次', async (t) => {
+    const s = await setup(t);
+    const { ws, deviceToken } = await s.bindDevice({ version: null });
+    await waitFrame(ws, 'notice');
+    const again = connect(`${s.base}/ws/device?token=${deviceToken}`);
+    s.sockets.push(again);
+    await waitFrame(again, 'ready');
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(!again.frames.some((f) => f.type === 'notice'), '24 小时内不应重复提示');
+  });
+
+  test('旧版设备有补投通知时不推升级提示，避免顶掉真实通知', async (t) => {
+    const s = await setup(t);
+    await s.publish('请到办公室。');
+    const { ws } = await s.bindDevice({ version: null });
+    await waitFrame(ws, 'notice');
+    await new Promise((r) => setTimeout(r, 200));
+    const notices = ws.frames.filter((f) => f.type === 'notice');
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].content, '请到办公室。');
+  });
+
+  test('新版设备不会收到升级提示', async (t) => {
+    const s = await setup(t);
+    const { ws } = await s.bindDevice();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(!ws.frames.some((f) => f.type === 'notice'));
+  });
+
+  test('关闭 LEGACY_UPGRADE_PROMPT 后不推升级提示', async (t) => {
+    const s = await setup(t, { legacyUpgradePrompt: false });
+    const { ws } = await s.bindDevice({ version: null });
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(!ws.frames.some((f) => f.type === 'notice'));
   });
 });

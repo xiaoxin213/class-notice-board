@@ -92,6 +92,17 @@ function dismiss() {
   }
 }
 
+// 主进程切换到另一种展示窗口时收起本窗口：停掉计时与播报，不重复回执
+window.cnb.on('notify:hide', () => {
+  clearTimeout(timer);
+  clearTimeout(ttsTimer);
+  clearInterval(cdTimer);
+  window.speechSynthesis.cancel();
+  document.getElementById('box').hidden = true;
+  document.getElementById('closeBtn').hidden = true;
+  currentId = null;
+});
+
 document.getElementById('closeBtn').addEventListener('click', (e) => {
   e.stopPropagation();
   dismiss();
@@ -134,7 +145,8 @@ window.cnb.on('notify:show', (notice) => {
     if (left <= 0) clearInterval(cdTimer);
   }, 1000);
 
-  let remaining = notice.speakTimes || 1;
+  // speak=false：教师选择了静音，不播报
+  let remaining = notice.speak === false ? 0 : (notice.speakTimes || 1);
   function speak() {
     if (remaining <= 0) return;
     remaining--;
@@ -146,7 +158,9 @@ window.cnb.on('notify:show', (notice) => {
     utt.onend = () => { if (remaining > 0) ttsTimer = setTimeout(speak, 800); };
     window.speechSynthesis.speak(utt);
   }
-  if (window.speechSynthesis.getVoices().length > 0) {
+  if (remaining <= 0) {
+    // 静音，不播报
+  } else if (window.speechSynthesis.getVoices().length > 0) {
     speak();
   } else {
     window.speechSynthesis.onvoiceschanged = () => { speak(); window.speechSynthesis.onvoiceschanged = null; };
