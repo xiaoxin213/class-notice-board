@@ -27,6 +27,8 @@ export function loadConfig(env = process.env) {
     offlineTimeoutMs: int(env.OFFLINE_TIMEOUT_MS, 60_000),
     // 旧版教室端（不上报版本号）上线时，每天最多推送一次"请升级"提示；设为 0 关闭
     legacyUpgradePrompt: env.LEGACY_UPGRADE_PROMPT !== '0',
+    // 只在设备离线超过这么久之后的首次连接时提示（≈每天早上开机），避免课堂上断线重连时弹出
+    upgradePromptMinOfflineSeconds: int(env.UPGRADE_PROMPT_MIN_OFFLINE_SECONDS, 6 * 3600),
     // 静态文件目录，生产环境设为 web/dist 的路径
     webRoot: env.WEB_ROOT || '',
   };

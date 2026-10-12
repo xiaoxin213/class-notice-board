@@ -453,7 +453,10 @@ export function buildApp(db, config, { logger = false } = {}) {
         type: 'device_status', classId: device.class_id, online: hub.onlineCount(device.class_id),
       });
       const redelivered = deliverPending(db, hub, device.id, device.class_id);
-      if (!version && config.legacyUpgradePrompt && redelivered === 0) {
+      // device.last_seen_at 是本次连接前的值：离线够久才算"开机首连"，课堂上断线重连不提示
+      const offlineLongEnough = !device.last_seen_at
+        || now() - device.last_seen_at >= config.upgradePromptMinOfflineSeconds;
+      if (!version && config.legacyUpgradePrompt && redelivered === 0 && offlineLongEnough) {
         maybePromptUpgrade(db, hub, device.id);
       }
 

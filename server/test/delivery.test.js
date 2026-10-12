@@ -64,13 +64,18 @@ async function setup(t, overrides = {}) {
     ctx, classId, auth, base, sockets,
 
     /** version 默认模拟新版客户端；传 null 模拟不上报版本号的旧版客户端 */
-    async bindDevice({ version = '1.1.0', deviceName = '五一班教室机' } = {}) {
+    async bindDevice({ version = '1.1.0', deviceName = '五一班教室机', offlineHours = 0 } = {}) {
       const { code } = (await ctx.app.inject({
         method: 'POST', url: `/api/classes/${classId}/bind-code`, headers: auth,
       })).json();
       const bound = (await ctx.app.inject({
         method: 'POST', url: '/api/device/bind', payload: { code, deviceName },
       })).json();
+      // 模拟设备已离线 offlineHours 小时（如前一天放学关机）
+      if (offlineHours) {
+        ctx.db.prepare('UPDATE device SET last_seen_at = ? WHERE id = ?')
+          .run(Math.floor(Date.now() / 1000) - offlineHours * 3600, bound.deviceId);
+      }
       const v = version ? `&v=${encodeURIComponent(version)}` : '';
       const ws = connect(`${base}/ws/device?token=${bound.deviceToken}${v}`);
       sockets.push(ws);
@@ -263,9 +268,9 @@ describe('新旧版本教室端兼容', () => {
     assert.equal((await s.publish('测试')).json().legacyOnline, 1);
   });
 
-  test('旧版设备上线时收到一次升级提示（id=0），回执被忽略', async (t) => {
+  test('旧版设备开机首连（离线超 6 小时）收到一次升级提示（id=0），回执被忽略', async (t) => {
     const s = await setup(t);
-    const { ws } = await s.bindDevice({ version: null });
+    const { ws } = await s.bindDevice({ version: null, offlineHours: 12 });
     const frame = await waitFrame(ws, 'notice');
     assert.equal(frame.id, 0);
     assert.match(frame.content, /新版本/);
@@ -276,8 +281,11 @@ describe('新旧版本教室端兼容', () => {
 
   test('升级提示 24 小时内只推一次', async (t) => {
     const s = await setup(t);
-    const { ws, deviceToken } = await s.bindDevice({ version: null });
+    const { ws, deviceToken, deviceId } = await s.bindDevice({ version: null, offlineHours: 12 });
     await waitFrame(ws, 'notice');
+    // 即使再次离线很久，24 小时内也不重复
+    s.ctx.db.prepare('UPDATE device SET last_seen_at = ? WHERE id = ?')
+      .run(Math.floor(Date.now() / 1000) - 12 * 3600, deviceId);
     const again = connect(`${s.base}/ws/device?token=${deviceToken}`);
     s.sockets.push(again);
     await waitFrame(again, 'ready');
@@ -288,7 +296,7 @@ describe('新旧版本教室端兼容', () => {
   test('旧版设备有补投通知时不推升级提示，避免顶掉真实通知', async (t) => {
     const s = await setup(t);
     await s.publish('请到办公室。');
-    const { ws } = await s.bindDevice({ version: null });
+    const { ws } = await s.bindDevice({ version: null, offlineHours: 12 });
     await waitFrame(ws, 'notice');
     await new Promise((r) => setTimeout(r, 200));
     const notices = ws.frames.filter((f) => f.type === 'notice');
@@ -305,8 +313,15 @@ describe('新旧版本教室端兼容', () => {
 
   test('关闭 LEGACY_UPGRADE_PROMPT 后不推升级提示', async (t) => {
     const s = await setup(t, { legacyUpgradePrompt: false });
-    const { ws } = await s.bindDevice({ version: null });
+    const { ws } = await s.bindDevice({ version: null, offlineHours: 12 });
     await new Promise((r) => setTimeout(r, 200));
     assert.ok(!ws.frames.some((f) => f.type === 'notice'));
+  });
+
+  test('课堂上断线重连（离线不足 6 小时）不推升级提示', async (t) => {
+    const s = await setup(t);
+    const { ws } = await s.bindDevice({ version: null, offlineHours: 1 });
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(!ws.frames.some((f) => f.type === 'notice'), '课堂中重连不应弹出升级提示');
   });
 });
